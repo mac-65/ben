@@ -32,6 +32,7 @@
 #
 
 HS1_CHARACTERS='‘’∕“”…' ;
+export G_DEBUG_check_format=0 ;
 
 export MY_UNRAR='/usr/bin/unrar' ;
 export ERROR_UNRAR_T=7 ;
@@ -51,6 +52,7 @@ export BANNER='/ant/banner' ;
 export ERROR_GROUP_COUNT=15 ;
 export ERROR_NOT_METADATA_TAG=17 ;
 export ERROR_METADATA_TAG_ARG=18 ;
+export ERROR_FORMAT=14 ;
 
 export ATTR_OFF="`tput sgr0`" ;
 export ATTR_BOLD="`tput bold`" ;
@@ -129,9 +131,36 @@ my_chdir() {
 
 
 ###############################################################################
+# check_format()
+#
+check_format() { # regexp message variable expected_format
+  my_regx="$1" ; shift ;
+  my_msg="$1" ; shift ;
+  my_var="$1" ; shift ;
+  my_expect="$1" ; shift ;
+
+  if [[ ! "${my_var}" =~ $my_regx ]] ; then # {
+    printf "${ATTR_ERROR} ${ATTR_CYAN}%s timestamp ${ATTR_CLR_BOLD}'${ATTR_YELLOW}%s${ATTR_CLR_BOLD}'" \
+           "${my_msg}" "${my_var}" ;
+    printf " expecting format = '${ATTR_GREEN}%s${ATTR_CLR_BOLD}'.${ATTR_OFF}\n" "${my_expect}" ;
+    if [ ${G_DEBUG_check_format} -eq 0 ] ; then
+      exit ${ERROR_FORMAT} ;
+    fi # }
+  fi # }
+}
+
+
+###############################################################################
 # Lazy way to calculate the timestamps for FFMPEG from CUE sheet INDEX values.
 #
 # https://stackoverflow.com/questions/35494666/calculate-time-difference-in-format-of-hhmmss-ms
+# https://en.wikipedia.org/wiki/Cue_sheet_(computing)
+#
+# The INDEX in a CUE sheet is specified as MM:SS:FF format, where FF is in the
+# range of 00-74 (inclusive)  as there are 75 such frames per second of audio.
+# The FFMPEG time format is HH:MM:SS.MILLISECONDS, so the frames would need
+# to be converted to milliseconds.
+# An INDEX 01 '04:04:25' would be '00:04:04.333' for FFMPEG.
 #
 G_TIME_RESULT='' ;
 get_time_difference() { # 'cue | ms' "${END_TIME}" "${START_TIME}"
@@ -139,16 +168,25 @@ get_time_difference() { # 'cue | ms' "${END_TIME}" "${START_TIME}"
   local MY_TYPE="$1" ; shift ;
   local VARIABLE_1="$1" ; shift ;
   local VARIABLE_2='' ;
+
+  #############################################################################
+  # Add a "special" case hack for a CUE time with only a single ARG - we'll
+  # treat it as a conversion request to a suitable FFMPEG time format string.
+  #
   if [ $# -eq 1 ] ; then # {
     VARIABLE_2="$1" ; shift ;
   else # }{
-    VARIABLE_2='00:00:00' ; shift ;
+    VARIABLE_2='00:00:00' ;
   fi # }
 
   if [ "${MY_TYPE}" = 'ms' ] ; then # {
+    check_format '^[0-9][0-9]:[0-9][0-9]:[0-9][0-9][.][0-9][0-9][0-9]$' 'First' "${VARIABLE_1}" 'HH:MM:SS.MILLISECONDS' ;
+    check_format '^[0-9][0-9]:[0-9][0-9]:[0-9][0-9][.][0-9][0-9][0-9]$' 'Second' "${VARIABLE_2}" 'HH:MM:SS.MILLISECONDS' ;
     VARIABLE_1_IN_MS=$( echo "${VARIABLE_1}" | awk -F'[:]|[.]' '{print $1 * 60 * 60 * 1000 + $2 * 60 * 1000 + $3 * 1000 + $4}' )
     VARIABLE_2_IN_MS=$( echo "${VARIABLE_2}" | awk -F'[:]|[.]' '{print $1 * 60 * 60 * 1000 + $2 * 60 * 1000 + $3 * 1000 + $4}' )
   else # }{
+    check_format '^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$' 'First' "${VARIABLE_1}" 'HH:MM:FF' ;
+    check_format '^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]$' 'Second' "${VARIABLE_2}" 'HH:MM:FF' ;
     VARIABLE_1_IN_MS=$( echo "${VARIABLE_1}" | awk -F'[:]' '{print $1 * 60 * 1000 + $2 * 1000 + (($3 / 75) * 1000)}' )
     VARIABLE_2_IN_MS=$( echo "${VARIABLE_2}" | awk -F'[:]' '{print $1 * 60 * 1000 + $2 * 1000 + (($3 / 75) * 1000)}' )
   fi # }
@@ -247,7 +285,68 @@ my_check_cover_art() { # "${COVER_ART}"
       printf "${ATTR_OFF}\n" ;
     fi # }
   else # }{
-    printf "${ATTR_BOLD}==> ${ATTR_YELLOW_BOLD}NO COVER ARTWORK WAS PROVIDED ...${ATTR_OFF}\n" ;
+    printf "${ATTR_BOLD}  ==> ${ATTR_YELLOW_BOLD}NO COVER ARTWORK WAS PROVIDED ...${ATTR_OFF}\n" ;
+  fi # }
+}
+
+
+###############################################################################
+#
+my_test_archive() { # "${MY_GOLD}"
+  local my_gold="$1" ; shift ;
+
+  local my_file_type="${my_gold##*.}" ;
+
+  printf "${ATTR_BOLD}Testing '${ATTR_YELLOW}${my_gold}${ATTR_CLR_BOLD}' .${ATTR_OFF}" ;
+
+  if [ "${my_file_type}" = 'rar' ] ; then # {
+    ${MY_UNRAR} t "${my_gold}" >/dev/null ; RC=$? ;
+  elif [ "${my_file_type}" = 'zip' ] ; then # }{
+    ${MY_UNZIP} -tqq "${my_gold}" ; RC=$? ;
+  elif [ "${my_file_type}" = 'ape' ] ; then # }{
+    ${FFMPEG} ${FFMPEG_OPT} -v warning -i "${my_gold}" -f null - ; RC=$? ;
+  fi # }
+
+  if [ ${RC} -ne 0 ] ; then # {
+    printf "${ATTR_BOLD}..${ATTR_RED_BOLD} FAILED!" ;
+    printf "${ATTR_OFF}\n" ;
+    exit ${ERROR_UNRAR_T} ;
+  else # }{
+    printf "${ATTR_BOLD}..${ATTR_GREEN_BOLD} SUCCESS!" ;
+    printf "${ATTR_OFF}\n" ;
+  fi # }
+}
+
+
+###############################################################################
+#
+my_extract_archive() { # "${ARCHIVE}" "${LOCATION}" "${MUSIC_DIR}"
+  local my_archive="$1" ; shift ;
+  local location="$1" ; shift ;
+  local music_dir="$1" ; shift ;
+
+  local file_type="${my_archive##*.}" ;
+
+  if [ "${music_dir}" != '' ] ; then # {
+    { pushd "${location}" ; } >/dev/null 2>&1 ;
+    if [ ! -d "${music_dir}" ] ; then # {
+      printf "${ATTR_BOLD}Extracting '${ATTR_GREEN}${my_archive}${ATTR_CLR_BOLD}' ...${ATTR_OFF}" ;
+      if [ "${file_type}" = 'rar' ] ; then # {
+        ${MY_UNRAR} x "../${my_archive}" >/dev/null ; RC=$? ;
+      elif [ "${file_type}" = 'zip' ] ; then # }{
+        ${MY_UNZIP} -x "../${my_archive}" ; RC=$? ;
+      fi # }
+
+      if [ ${RC} -ne 0 ] ; then # {
+        printf "${ATTR_BOLD}..${ATTR_RED_BOLD} FAILED!" ;
+        printf "${ATTR_OFF}\n" ;
+        exit ${ERROR_UNRAR_T} ;
+      else # }{
+        printf "${ATTR_BOLD}..${ATTR_GREEN_BOLD} SUCCESS!" ;
+        printf "${ATTR_OFF}\n" ;
+      fi # }
+    fi # }
+    { popd ; } >/dev/null 2>&1 ;
   fi # }
 }
 
