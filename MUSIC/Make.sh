@@ -22,6 +22,10 @@
 # By default, it only checks headers of the file for better performance.  Here
 # we use ‘+ping’ to disable the feature and make identify read the whole file.
 #
+# https://stackoverflow.com/questions/22120041/prevent-libavformat-ffmpeg-from-adding-encoder-tag-to-output-help-strippin
+#   https://trac.ffmpeg.org/ticket/6602
+#   -fflags +bitexact
+#
 ###############################################################################
 # https://pypi.org/project/ffcuesplitter/
 #
@@ -29,9 +33,11 @@
 # https://unix.stackexchange.com/questions/654812/how-to-convert-ape-files-to-flac-in-linux
 #
 ###############################################################################
+# https://trac.ffmpeg.org/ticket/6602
+# The "Encoded by" tag ...
 #
 
-HS1_CHARACTERS='‘’∕“”…' ;
+HS1_CHARACTERS='‘’∕“”…■' ;
 export G_DEBUG_check_format=0 ;
 
 export MY_UNRAR='/usr/bin/unrar' ;
@@ -52,7 +58,8 @@ export BANNER='/ant/banner' ;
 export ERROR_GROUP_COUNT=15 ;
 export ERROR_NOT_METADATA_TAG=17 ;
 export ERROR_METADATA_TAG_ARG=18 ;
-export ERROR_FORMAT=14 ;
+export ERROR_CHECK_FORMAT=14 ;
+export ID3V2='/usr/bin/id3v2' ; # better than ffmpeg?
 
 export ATTR_OFF="`tput sgr0`" ;
 export ATTR_BOLD="`tput bold`" ;
@@ -144,7 +151,7 @@ check_format() { # regexp message variable expected_format
            "${my_msg}" "${my_var}" ;
     printf " expecting format = '${ATTR_GREEN}%s${ATTR_CLR_BOLD}'.${ATTR_OFF}\n" "${my_expect}" ;
     if [ ${G_DEBUG_check_format} -eq 0 ] ; then
-      exit ${ERROR_FORMAT} ;
+      exit ${ERROR_CHECK_FORMAT} ;
     fi # }
   fi # }
 }
@@ -296,14 +303,21 @@ my_test_archive() { # "${MY_GOLD}"
   local my_gold="$1" ; shift ;
 
   local my_file_type="${my_gold##*.}" ;
+  local RC=0 ;
 
   printf "${ATTR_BOLD}Testing '${ATTR_YELLOW}${my_gold}${ATTR_CLR_BOLD}' .${ATTR_OFF}" ;
 
+  #############################################################################
+  # These are the most common __archive__ types (maybe more later?) (APE and
+  # FLAC are typically accompanied with a CUE sheet, making then "archives"):
+  #
   if [ "${my_file_type}" = 'rar' ] ; then # {
     ${MY_UNRAR} t "${my_gold}" >/dev/null ; RC=$? ;
   elif [ "${my_file_type}" = 'zip' ] ; then # }{
     ${MY_UNZIP} -tqq "${my_gold}" ; RC=$? ;
   elif [ "${my_file_type}" = 'ape' ] ; then # }{
+    ${FFMPEG} ${FFMPEG_OPT} -v warning -i "${my_gold}" -f null - ; RC=$? ;
+  elif [ "${my_file_type}" = 'flac' ] ; then # }{
     ${FFMPEG} ${FFMPEG_OPT} -v warning -i "${my_gold}" -f null - ; RC=$? ;
   fi # }
 
@@ -352,12 +366,25 @@ my_extract_archive() { # "${ARCHIVE}" "${LOCATION}" "${MUSIC_DIR}"
 
 
 ###############################################################################
+# https://stackoverflow.com/questions/20193065/how-to-remove-id3-audio-tag-image-or-metadata-from-mp3-with-ffmpeg
+# ffmpeg -i input.mp3 -map 0:a -c:a copy -map_metadata -1 output.mp3
+#   -map 0:a Includes only audio (omits all images). See FFmpeg Wiki: Map for more details.
+#   -c:a copy Enables stream copy mode so re-encoding is avoided.
+#   -map_metadata -1 Omits all metadata.
+#   -fflags +bitexact removes the ENCODER tag
 #
-my_encode_audio_track() { # "${MUSIC_TRACK}" "${TRACK}" "${EXTRA_METADATA}" "${TRACK_TITLE_SED}" "${SLICE_ARGS}" "${COVER_ART}"
+# Some older encodings contain:
+# - bad metadata (e.g., the Artist/Title tag is NOT the track's artist/title),
+# - or metadata that is NOT UTF-8 encoding looks like garbage characters.
+# The easiest solution is to discard all of the metadata in the input track,
+# then add it back when we add in the album art and/or extra metadata.
+#
+my_encode_audio_track() { # discard_metadata "${MUSIC_TRACK}" "${TRACK}" "${EXTRA_METADATA}" "${TRACK_TITLE_SED}" "${SLICE_ARGS}" "${COVER_ART}"
 
-  if [ $# -ne 6 ] ; then # {
+  if [ $# -ne 7 ] ; then # {
     printf "${ATTR_RED_BOLD}" ; ${BANNER} 'Error' ; printf "${ATTR_CLR_BOLD}" ;
   fi # }
+  local discard_all_metadata="$1" ; shift ; # FIXME - finish writing
   local audio_filename_in="$1" ; shift ;
   local audio_filename_out="$1" ; shift ;
   local my_extra_metadata="$1" ; shift ;
@@ -365,8 +392,35 @@ my_encode_audio_track() { # "${MUSIC_TRACK}" "${TRACK}" "${EXTRA_METADATA}" "${T
   local ffmpeg_slice_args="$1" ; shift ;
   local cover_art="$1" ; shift ;
 
+  local temp_out_filename='' ;
+
   if [ ${my_encode_audio_track_DEBUG} -eq 1 ] ; then # {
      set -x ;
+  fi # }
+
+  #############################################################################
+  # The source has unusable metadata ...
+  #
+  if [ ${discard_all_metadata} -eq 1 ] ; then # {
+    my_mkdir -quiet 'NO_RSYNC' ; # (We probably already did this; won't hurt.)
+    if [ "${my_extra_metadata}" = '' ] ; then # {
+        #######################################################################
+        # This ISN'T an error per se, but we'll print a message about it ...
+      printf 'NOTE :: stripping all metadata from output!!!\n' ; # FIXME better desc
+    fi # }
+    local output_file_type="${audio_filename_out##*.}" ;
+    temp_out_filename="./NO_RSYNC/$(basename "${audio_filename_out}" ".${output_file_type}")-temp.${output_file_type}" ;
+
+      #########################################################################
+      # We do NOT handle the 'ffmpeg_slice_args' because I don't think there
+      # are any audio files (with corrupt metadata) that also have a CUE sheet.
+      #
+    /bin/rm -f "${temp_out_filename}" ;
+    ${FFMPEG} ${FFMPEG_OPT} \
+              -i "${audio_filename_in}" \
+              -map 0:a -c:a copy -map_metadata -1 -fflags +bitexact \
+              "${temp_out_filename}" ;
+    audio_filename_in="${temp_out_filename}" ;
   fi # }
 
   #############################################################################
@@ -391,10 +445,6 @@ my_encode_audio_track() { # "${MUSIC_TRACK}" "${TRACK}" "${EXTRA_METADATA}" "${T
   echo     "  ${ATTR_YELLOW_BOLD}<< Title='${ATTR_YELLOW}${track_title}${ATTR_YELLOW_BOLD}' >>${ATTR_OFF}" ;
  
   #############################################################################
-  # TODO
-  # if the source type and the destination type are EQUAL, add '-codec copy'
-  # else if the destination type is flac, add '-compression_level 12' instead.
-  #############################################################################
   # Okay, if we have cover art, add it to the audio file.
   # Otherwise, build a hard link to the audio file.
   # Subtle - the placement of -ss and -t is important with artwork attachments.
@@ -406,6 +456,8 @@ my_encode_audio_track() { # "${MUSIC_TRACK}" "${TRACK}" "${EXTRA_METADATA}" "${T
   if [ "${audio_filename_in_type}" = "${audio_filename_out_type}" ] ; then # {
     ffmpeg_codec='-codec copy' ;
   else # }{
+      #########################################################################
+      # If we're re-encoding (to FLAC) ensure the highest compression level.
     ffmpeg_codec='-compression_level 12' ;
   fi # }
 
@@ -423,7 +475,7 @@ my_encode_audio_track() { # "${MUSIC_TRACK}" "${TRACK}" "${EXTRA_METADATA}" "${T
           "${audio_filename_out}" ; RC=$? ;
 
   #############################################################################
-  # UNTESTED if artwork already exists with 'ffmpeg_slice_args' non-EMPTY.
+  # This is UNTESTED if artwork already exists with 'ffmpeg_slice_args' non-EMPTY.
   elif [ "${ffmpeg_extra_metadata}" != '' ] ; then # }{
     eval set -- "${ffmpeg_extra_metadata}" ;
     ${FFMPEG} ${FFMPEG_OPT} \
@@ -438,6 +490,8 @@ my_encode_audio_track() { # "${MUSIC_TRACK}" "${TRACK}" "${EXTRA_METADATA}" "${T
     /bin/ln "${audio_filename_in}" "${audio_filename_out}" ; RC=$? ;
 
   fi # }
+
+  [ "${temp_out_filename}" != '' ] && /bin/rm -f "${temp_out_filename}" ;
 
   { set +x ; } >/dev/null 2>&1 ;
   return ${RC} ;
@@ -456,13 +510,20 @@ my_encode_audio_track() { # "${MUSIC_TRACK}" "${TRACK}" "${EXTRA_METADATA}" "${T
 ###############################################################################
 #
 
-find . -maxdepth 1 -type d ! -name '.git' | while read DIRECTORY ; do # {
-  [ "${DIRECTORY}" = '.' ] && continue ;
-
+if [ $# -eq 1 ] ; then # {
+  DIRECTORY="$1" ; shift ;
   if [ -x "${DIRECTORY}/Songs.sh" ] ; then # {
     my_chdir "${DIRECTORY}" ; RC=$? ;
   fi # }
-done # }
+else # }{
+  find . -maxdepth 1 -type d ! -name '.git' | while read DIRECTORY ; do # {
+    [ "${DIRECTORY}" = '.' ] && continue ;
+
+    if [ -x "${DIRECTORY}/Songs.sh" ] ; then # {
+      my_chdir "${DIRECTORY}" ; RC=$? ;
+    fi # }
+  done # }
+fi # }
 
 exit 0;
 
