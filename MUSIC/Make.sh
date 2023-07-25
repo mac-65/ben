@@ -26,6 +26,16 @@
 #   https://trac.ffmpeg.org/ticket/6602
 #   -fflags +bitexact
 #
+# https://stackoverflow.com/questions/20193065/how-to-remove-id3-audio-tag-image-or-metadata-from-mp3-with-ffmpeg
+# ffmpeg -i input.mp3 -map 0:a -c:a copy -map_metadata -1 output.mp3
+#   -map 0:a Includes only audio (omits all images). See FFmpeg Wiki: Map for more details.
+#   -c:a copy Enables stream copy mode so re-encoding is avoided.
+#   -map_metadata -1 Omits all metadata.
+#   -fflags +bitexact removes the ENCODER tag
+#
+# https://stackoverflow.com/questions/965053/extract-filename-and-extension-in-bash
+#   AUDIO_FILE_TYPE="${TRACK##*.}" ;
+#
 ###############################################################################
 # https://pypi.org/project/ffcuesplitter/
 #
@@ -366,25 +376,24 @@ my_extract_archive() { # "${ARCHIVE}" "${LOCATION}" "${MUSIC_DIR}"
 
 
 ###############################################################################
-# https://stackoverflow.com/questions/20193065/how-to-remove-id3-audio-tag-image-or-metadata-from-mp3-with-ffmpeg
-# ffmpeg -i input.mp3 -map 0:a -c:a copy -map_metadata -1 output.mp3
-#   -map 0:a Includes only audio (omits all images). See FFmpeg Wiki: Map for more details.
-#   -c:a copy Enables stream copy mode so re-encoding is avoided.
-#   -map_metadata -1 Omits all metadata.
-#   -fflags +bitexact removes the ENCODER tag
-#
 # Some older encodings contain:
 # - bad metadata (e.g., the Artist/Title tag is NOT the track's artist/title),
 # - or metadata that is NOT UTF-8 encoding looks like garbage characters.
+#
 # The easiest solution is to discard all of the metadata in the input track,
 # then add it back when we add in the album art and/or extra metadata.
 #
 my_encode_audio_track() { # discard_metadata "${MUSIC_TRACK}" "${TRACK}" "${EXTRA_METADATA}" "${TRACK_TITLE_SED}" "${SLICE_ARGS}" "${COVER_ART}"
 
+  if [ ${my_encode_audio_track_DEBUG} -eq 1 ] ; then # {
+     set -x ;
+  fi # }
+
   if [ $# -ne 7 ] ; then # {
     printf "${ATTR_RED_BOLD}" ; ${BANNER} 'Error' ; printf "${ATTR_CLR_BOLD}" ;
+    exit 2 ;
   fi # }
-  local discard_all_metadata="$1" ; shift ; # FIXME - finish writing
+  local discard_all_metadata="$1" ; shift ;
   local audio_filename_in="$1" ; shift ;
   local audio_filename_out="$1" ; shift ;
   local my_extra_metadata="$1" ; shift ;
@@ -394,14 +403,9 @@ my_encode_audio_track() { # discard_metadata "${MUSIC_TRACK}" "${TRACK}" "${EXTR
 
   local temp_out_filename='' ;
 
-  if [ ${my_encode_audio_track_DEBUG} -eq 1 ] ; then # {
-     set -x ;
-  fi # }
-
-  #############################################################################
-  # The source has unusable metadata ...
-  #
-  if [ ${discard_all_metadata} -eq 1 ] ; then # {
+    ###########################################################################
+    # The source has unusable metadata ...
+  if [ ${discard_all_metadata} = 'true' ] ; then # {
     my_mkdir -quiet 'NO_RSYNC' ; # (We probably already did this; won't hurt.)
     if [ "${my_extra_metadata}" = '' ] ; then # {
         #######################################################################
@@ -414,7 +418,6 @@ my_encode_audio_track() { # discard_metadata "${MUSIC_TRACK}" "${TRACK}" "${EXTR
       #########################################################################
       # We do NOT handle the 'ffmpeg_slice_args' because I don't think there
       # are any audio files (with corrupt metadata) that also have a CUE sheet.
-      #
     /bin/rm -f "${temp_out_filename}" ;
     ${FFMPEG} ${FFMPEG_OPT} \
               -i "${audio_filename_in}" \
@@ -423,17 +426,17 @@ my_encode_audio_track() { # discard_metadata "${MUSIC_TRACK}" "${TRACK}" "${EXTR
     audio_filename_in="${temp_out_filename}" ;
   fi # }
 
-  #############################################################################
-  # Some of the (older) encoding may be missing the 'Title' metadata tag ...
-  #
-  # If the Title is missing, we'll apply a regex to the track's filename to
-  # build its title then add it to the output via the FFMPEG command line.
-  # Not perfect, but "good enough" ...
-  #
+    ###########################################################################
+    # Some of the (older) encoding may be missing the 'Title' metadata tag ...
+    #
+    # If the Title is missing, we'll apply a regex to the track's filename to
+    # build its title then add it to the output via the FFMPEG command line.
+    # Not perfect, but "good enough" ...
   local audio_type="${audio_filename_out##*.}" ;
   local track_title="$(${EXIFTOOL} "${audio_filename_in}" | ${EGREP} '^Title  ')" ;
 
   if [ "${track_title}" = '' ] ; then # {
+    ## TODO FIXME :: SKIP this if the metadata already contains a 'title=' tag!
     track_title="$(basename "${audio_filename_out}" ".${audio_type}" \
                  | sed "${my_title_sed}")" ;
     ffmpeg_extra_metadata="${my_extra_metadata} -metadata 'title=${track_title}'" ;
@@ -499,6 +502,124 @@ my_encode_audio_track() { # discard_metadata "${MUSIC_TRACK}" "${TRACK}" "${EXTR
 
 
 ###############################################################################
+# APE files are lossless, but very primitive otherwise (no metadata, I think).
+# https://myanimelist.net/anime/2164/Dennou_Coil
+#
+# Usually a CD encode as an APE file is a single APE file for the whole CD,
+# so we'll have to extract each interesting title individuality.
+#
+# process_tracks "${TYPE_EXT_IN}" "${MUSIC_TRACKs}" "${EXTRA_METADATA}"
+#
+process_tracks() {
+  local music_track_groups=8 ; # Some basic integrity checking ...
+
+  local type_ext_in="$1" ; shift ;
+  local music_tracks="$1" ; shift ;
+  local extra_metadata="$1" ; shift ;
+
+if [ "${type_ext_in}" = 'ape' -o "${type_ext_in}" = 'mp3' ] ; then # {
+
+  my_gold_source_checked='' ; # We have NOT tested any source ...
+
+  eval set -- "${music_tracks}" ;
+  while [ $# -ne 0 ] ; do # { ...for each audio track we're interested in.
+
+      #########################################################################
+      # Not too robust error checking and little better than no error checkng.
+    if [ $# -lt ${music_track_groups} ] ; then # {
+      printf "${ATTR_ERROR} ${ATTR_CLR_BOLD}Not enough items (%d) for this track in this group!${ATTR_OFF}" $# ;
+      exit ${ERROR_GROUP_COUNT} ;
+    fi # }
+
+    local track_extra_metadata="${EXTRA_METADATA}" ;
+
+    local my_discard_metadata="$1" ; shift ;
+    local my_gold_source="$1" ; shift ;
+    local audio_filename_out="$1" ; shift ;
+    local audio_filename_out_fix="$1" ; shift ; # TODO finish this ...
+    local track_title_sed="$1" ; shift ;
+    local cover_art_filename="$1" ; shift ;
+    local slice_args="$1" ; shift ;
+
+    local must_have_tag=1 ; # We __must__ have at least 1 tag (even if it's EMPTY).
+    while [ $# -gt 0 ] ; do # {
+      ffmpeg_metadata="$1" ;
+      if [ "${ffmpeg_metadata}" = '' ] ; then # {
+        shift ; break ;
+      elif [ "${ffmpeg_metadata}" != '-metadata' ] ; then # }{
+        if [ ${must_have_tag} -eq 0 ] ; then # {
+          break ;
+        fi # }
+        printf "${ATTR_ERROR} ${ATTR_CLR_BOLD}Found '%s' instead of '-metadata' tag.${ATTR_OFF}" "${ffmpeg_metadata}" ;
+        exit ${ERROR_NOT_METADATA_TAG} ;
+      elif [ $# -lt 1 ] ; then # }{
+        printf "${ATTR_ERROR} ${ATTR_CLR_BOLD}'-metadata' tag has no argument.${ATTR_OFF}" "${ffmpeg_metadata}" ;
+        exit ${ERROR_METADATA_TAG_ARG} ;
+      fi # }
+      shift ;
+      ffmpeg_metadata_arg="$1" ; shift ;
+      track_extra_metadata="${track_extra_metadata} -metadata '${ffmpeg_metadata_arg}'" ;
+      must_have_tag=0 ;
+    done # }
+
+    ###########################################################################
+    # Okay.  We've walked through a single track in the 'MUSIC_TRACKs' array.
+    #
+    # If 'my_gold_source' is a directory, then 'audio_filename_out' is the
+    # track we want in __that__ directory -- that track will be copied to
+    # 'my_extraction_dir'.  We'll reset 'my_gold_source' to point to the
+    # copied track in 'my_extraction_dir' so that we can perform any encoding.
+    # BUG :: We nee to "fix" the 'audio_filename_out' to conform to the
+    #        "XX title.mp3" filename convention.
+    # BUG :: Also, 08 produces a playable file with the artwork, but exiftool
+    #        does not dump it correctly.  Is this because of the original file?
+    #
+    if [ -d "${my_gold_source}" ] ; then # {
+      if [ "${audio_filename_out_fix}" != '' ] ; then # {
+         copy_to_filename="${audio_filename_out_fix}" ;
+      else # }{
+         copy_to_filename="${audio_filename_out}" ;
+      fi # }
+      if [ ! -s "${my_extraction_dir}/${copy_to_filename}" ] ; then # {
+        /bin/cp -p "${my_gold_source}/${audio_filename_out}" "${my_extraction_dir}/${copy_to_filename}" ;
+      fi # }
+      my_check_audio_file "${my_extraction_dir}/${copy_to_filename}" ;
+      if [ "${audio_filename_out_fix}" != '' ] ; then # {
+        audio_filename_out="${audio_filename_out_fix}" ;
+      fi # }
+      my_gold_source="${my_extraction_dir}/${copy_to_filename}" ; # HACK!
+    elif [ "${my_gold_source_checked}" != "${my_gold_source}" ] ; then # }{
+      my_gold_source_checked="${my_gold_source}" ;
+
+      # We'll __always__ verify the GOLD standard ...
+      my_test_archive "${my_gold_source}" ;
+    fi # }
+
+    if [ ! -s "${audio_filename_out}" ] ; then # {
+      my_check_cover_art "${cover_art_filename}" ;
+
+        #######################################################################
+        # Set to '1' to enable 'set -x' in “my_encode_audio_track()” ...
+      my_encode_audio_track_DEBUG=0 ; # Probably should make an argument of ().
+      my_encode_audio_track "${my_discard_metadata}" \
+                            "${my_gold_source}" \
+                            "${audio_filename_out}" \
+                            "${track_extra_metadata}" \
+                            "${track_title_sed}" \
+                            "${slice_args}" \
+                            "${cover_art_filename}" ;
+    fi # }
+
+    my_check_audio_file "${audio_filename_out}" ;
+
+  done # } ...for each audio track
+
+fi # } "${TYPE_EXT_IN}" = 'ape'
+}
+
+
+###############################################################################
+###############################################################################
 #                                   ##    ##
 #    #    #    ##     #   #    #   #        #
 #    ##  ##   #  #    #   ##   #  #          #
@@ -516,7 +637,7 @@ if [ $# -eq 1 ] ; then # {
     my_chdir "${DIRECTORY}" ; RC=$? ;
   fi # }
 else # }{
-  find . -maxdepth 1 -type d ! -name '.git' | while read DIRECTORY ; do # {
+  find . -maxdepth 1 -type d ! -name '.git' ! -name '*IGNORE' | while read DIRECTORY ; do # {
     [ "${DIRECTORY}" = '.' ] && continue ;
 
     if [ -x "${DIRECTORY}/Songs.sh" ] ; then # {
