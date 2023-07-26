@@ -98,6 +98,27 @@ export ATTR_ERROR="${ATTR_RED_BOLD}ERROR -${ATTR_OFF}" ;
 export ATTR_NOTE="${ATTR_OFF}`tput setaf 12`NOTE -${ATTR_OFF}";
 export ATTR_TOOL="${ATTR_GREEN_BOLD}" ;
 
+
+###############################################################################
+#   ######                                #####
+#   #     #  #####    ##    #####        #     #   ####   #####   #####
+#   #     #  #       #  #   #    #       #        #    #  #    #  #
+#   #     #  ####   #    #  #    #       #        #    #  #    #  ####
+#   #     #  #      ######  #    #       #        #    #  #    #  #
+#   #     #  #      #    #  #    #       #     #  #    #  #    #  #
+#   ######   #####  #    #  #####         #####    ####   #####   #####
+#
+  if false ; then # {                   ## DBG
+    eval set -- "${MUSIC_TRACKs}" ;      # DBG
+    echo "$# = $@" ;                     # DBG
+    IDX=1;                               # DBG
+    while [ $# -ne 0 ] ; do # {          # DBG
+      printf "%d = '%s'\n" ${IDX} "$1"   # DBG
+      (( IDX++ )) ; shift ;              # DBG
+    done # }                             # DBG
+  fi # }                                ## DBG
+
+
 ###############################################################################
 #   #######
 #   #       #    #  #    #   ####   #####   #    ####   #    #   ####
@@ -376,6 +397,45 @@ my_extract_archive() { # "${ARCHIVE}" "${LOCATION}" "${MUSIC_DIR}"
 
 
 ###############################################################################
+# my_copy_archive( gold_copy_on_system, archive_top_level_directory )
+#
+# Copy an archive file from its "home" location to the current directory.
+#
+# 'gold_copy_on_system' points to the source "gold" copy of the music archive,
+#     e.g. “${HOME}/album_artist.zip” will be copied to “./album_artist.zip”.
+#     Usually, this is the file that is added to GIT.
+# 'archive_top_level_directory' is retrieved by listing the archive and
+#     noting the top level __directory__ of the archive.  The existence of
+#     this directory determines if the archive needs to be extracted.
+#
+my_copy_archive() { # "${GOLD_SOURCE}" "${DIRECTORY}"
+
+  local gold_source="$1" ; shift ;
+
+  if [ "${gold_source}" != '' ] ; then # {
+
+    local gold_local="$(basename "${gold_source}")" ;
+    local music_dir="$1" ; shift ;
+
+    if [ ! -s "${gold_local}" ] ; then # {
+      printf "${ATTR_BOLD}Copying '${ATTR_YELLOW}${gold_source}${ATTR_CLR_BOLD}'\n" ;
+      printf "    --> '${ATTR_YELLOW}./${gold_local}${ATTR_CLR_BOLD}'${ATTR_OFF}\n" ;
+      set +x ;
+      /bin/rm -f "./${gold_local}" ;
+      /bin/cp -p "${gold_source}" "./${gold_local}" ;
+      { set +x ; } >/dev/null 2>&1 ;
+    fi # }
+
+      # We'll __always__ verify the GOLD standard ...
+    my_test_archive "${gold_local}" ;
+
+    my_mkdir -quiet './NO_RSYNC' ;
+    my_extract_archive "${gold_local}" './NO_RSYNC' "${music_dir}" ;
+  fi # }
+}
+
+
+###############################################################################
 # Some older encodings contain:
 # - bad metadata (e.g., the Artist/Title tag is NOT the track's artist/title),
 # - or metadata that is NOT UTF-8 encoding looks like garbage characters.
@@ -516,6 +576,8 @@ process_tracks() {
   local type_ext_in="$1" ; shift ;
   local music_tracks="$1" ; shift ;
   local extra_metadata="$1" ; shift ;
+
+  local my_extraction_dir='./NO_RSYNC' ; # Woops, forgot to re-add this in!
 
 if [ "${type_ext_in}" = 'ape' -o "${type_ext_in}" = 'mp3' ] ; then # {
 
