@@ -7,6 +7,13 @@
 # source.  E.g., some may be RAR archives, ZIP or straight FLAC sources.
 #
 ###############################################################################
+# Required tools (many of these are probably installed by default):
+# - ffmpeg
+# - sed + pcre2 (the library)
+# - coreutils   - basename, cut, head, sort, tail, tee, et. al.
+# - util-linux  - getopt (not bash's getopts())
+#
+###############################################################################
 #H http://lifeofageekadmin.com/adding-cover-art-to-flac-file-from-command-line-and-gui/
 # Using metaflac (part of flac-1.3.4-2.fc37.x86_64).
 #   metaflac --import-picture-from="<image path>" "<FLAC path>"
@@ -37,6 +44,43 @@
 #   AUDIO_FILE_TYPE="${TRACK##*.}" ;
 #
 ###############################################################################
+# https://stackoverflow.com/questions/76515791/eyed3-fails-to-run-on-rhel-8-8
+# eyeD3 fails to run on RHEL 8.8
+#
+# Matches __exactly__ what I see ...  This is why I dislike script-kiddies ...
+# - https://bugzilla.redhat.com/show_bug.cgi?id=1933591
+#   https://bugzilla.redhat.com/attachment.cgi?id=1759946&action=diff
+#
+# According to the "bug report," it fails to run.  I receive the same-ish error
+# message that is in the question, but it will still attach album artwork just
+# fine (which is my use case).  Also, I can't find the cause of the error (I'm
+# not big on python programming).  On what I think is an identical Fedora 37
+# installation (I mean matching _every_ RPM/version) on VirtualBox, I do NOT
+# receive the error message at eyeD3's startup.  The only difference between
+# the two Fedora installations that should NOT matter is that the VirtualBox
+# installation was updated all at once, while my desktop was incrementally
+# updated over the past 6-7 months.  My theory is that there was a poison
+# update along the way that was not properly cleaned up in its subsequent
+# update(s).
+# (Stands on soap box) Programming is _easy_ -- writing test cases that
+# anticipate real-world use cases and catching regressions with the addition
+# of new features is a paradigm shift few developers can successfully execute.
+#
+###############################################################################
+# https://jmesb.com/how_to/create_id3_tags_using_ffmpeg :: IMPORTANT?
+#
+# ffmpeg32 -i in.mp3 -i metadata.txt -map_metadata 1 -c:a copy -id3v2_version 3 -write_id3v1 1 out.mp3
+#                                                              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+# ...
+# Remember the Version
+#
+# If you are planning on using the media files with metadata on Windows,
+# DO NOT forget to use these options in your command line:
+#
+#   -id3v2_version 3
+#   -write_id3v1 1
+#
+###############################################################################
 # https://pypi.org/project/ffcuesplitter/
 #
 # There's a snippet of using ffmpeg to test a file (does this work w/MP3s?)
@@ -46,8 +90,7 @@
 # https://trac.ffmpeg.org/ticket/6602
 # The "Encoded by" tag ...
 #
-
-HS1_CHARACTERS='‘’∕“”…■' ;
+HS1_CHARACTERS='‘’∕“”…■ Height: 5′ 3″' ;
 export G_DEBUG_check_format=0 ;
 
 export MY_UNRAR='/usr/bin/unrar' ;
@@ -57,8 +100,8 @@ export MY_UNZIP='/usr/bin/unzip' ;
 export ERROR_ARCHIVE_TEST=7 ;
 export FLAC='/usr/bin/flac' ;
 export ERROR_FLAC_T=6 ;
-export FFMPEG='/usr/bin/ffmpeg' ;
 export FFMPEG_OPT='-y -nostdin -hide_banner' ;
+export FFMPEG_ID3='-id3v2_version 3 -write_id3v1 1' ;
 export ERROR_FFMPEG_COVER=9 ;
 export MAGICK='/usr/bin/gm' ;
 export ERROR_IDENTIFY=11 ;
@@ -128,6 +171,93 @@ export ATTR_TOOL="${ATTR_GREEN_BOLD}" ;
 #   #       #    #  #   ##  #    #    #     #   #    #  #   ##  #    #
 #   #        ####   #    #   ####     #     #    ####   #    #   ####
 #
+###############################################################################
+###############################################################################
+# Ctl-C, signals and exit handler stuff ...
+# > To avoid the ‘stty: 'standard input': Inappropriate ioctl for device’
+#   message, we need to "protect" the ‘stty -echoctl’ command.
+#
+if [[ -t 0 ]] ; then
+  stty -echoctl ;       # hide '^C' on the terminal output
+fi
+export MY_MAKE_PID=$$ ; # I did NOT know about this one trick to exit :) ...
+
+abort() {
+   { set +x ; } >/dev/null 2>&1 ;
+
+   my_func="$1" ; shift ;
+   my_lineno="$1" ; shift ;
+
+   tput sgr0 ;
+   printf >&2 "${ATTR_ERROR} in '`tput setaf 3`%s`tput sgr0`()', line #%s\n" "${my_func}" "${my_lineno}" ;
+
+   kill -s SIGTERM $MY_MAKE_PID ;
+   exit 1 ; # I missed this the first time ...
+}
+
+
+###############################################################################
+# cleanup()
+#
+cleanup() {
+
+  echo 'CLEANUP -- not yet written' ;
+}
+
+
+###############################################################################
+# check_binary( verbose, cli_option, executable )
+#
+# DOES NOT return if there was an error.
+#
+check_binary() {
+  local my_verbose="$1" ; shift ; # display a SUCCESS message (TODO)
+  local my_option="$1" ; shift ;  # the 'getopt' option of caller
+  local my_binary="$1" ; shift ;  # search for this binary using 'which'
+
+  while : ; do  # {
+    if [ "${my_binary}" = '' ] ; then  # Pedantic, I know ...
+      echo "${ATTR_ERROR} ‘${my_option}’ requires a valid executable name." >&2 ;
+      break ;
+    fi
+
+      #########################################################################
+      # Use 'which' to get a complete pathname of the ffmpeg executable, and
+      # it also ensures that the file __is__ executable.
+      #
+      which "${my_binary}" >/dev/null 2>&1 ; RC=$? ;
+      (( RC )) && { \
+         printf >&2 "${ATTR_ERROR} ${ATTR_CLR_BOLD}The ‘${ATTR_CYAN_BOLD}%s${ATTR_CLR_BOLD}’\n" \
+                    "${my_binary}" ;
+         printf >&2 "        executable was not found by ‘which’.\n"
+         break ; }
+
+      local which_ffmpeg="$(which "${my_binary}")" ;
+
+      #########################################################################
+      # SUCCESS :: return directory's name as required.
+      #
+    printf '%s' "${which_ffmpeg}" ;
+    return 0;
+  done ;  # }
+
+    ###########################################################################
+    # FAILURE :: exit; we've already printed an appropriate error message above
+    #
+  abort ${FUNCNAME[0]} ${LINENO};
+}
+
+
+###############################################################################
+#
+init_global_options() {
+
+  export G_OUTPUT_DIR='./' ;
+
+  export G_FFMPEG_BIN="$(check_binary true '' 'ffmpeg')" ;
+}
+
+
 ###############################################################################
 #
 my_mkdir() { # -quiet
@@ -276,7 +406,7 @@ my_check_audio_file() { # "${TRACK}" ;
     fi # }
   elif [ "${AUDIO_FILE_TYPE}" = 'mp3' ] ; then # }{
     printf "${ATTR_BOLD}Verifing '${ATTR_CLR_BOLD}$(tput setab 9)${my_audio_file}${ATTR_CLR_BOLD}' .${ATTR_OFF}" ;
-    ${FFMPEG} ${FFMPEG_OPT} -v warning -i "${my_audio_file}" -f null - ; RC=$? ;
+    ${G_FFMPEG_BIN} ${FFMPEG_OPT} -v warning -i "${my_audio_file}" -f null - ; RC=$? ;
     if [ ${RC} -ne 0 ] ; then # {
       printf "${ATTR_BOLD}..${ATTR_RED_BOLD} FAILED!" ;
       printf "${ATTR_OFF}\n" ;
@@ -347,9 +477,9 @@ my_test_archive() { # "${MY_GOLD}"
   elif [ "${my_file_type}" = 'zip' ] ; then # }{
     ${MY_UNZIP} -tqq "${my_gold}" ; RC=$? ;
   elif [ "${my_file_type}" = 'ape' ] ; then # }{
-    ${FFMPEG} ${FFMPEG_OPT} -v warning -i "${my_gold}" -f null - ; RC=$? ;
+    ${G_FFMPEG_BIN} ${FFMPEG_OPT} -v warning -i "${my_gold}" -f null - ; RC=$? ;
   elif [ "${my_file_type}" = 'flac' ] ; then # }{
-    ${FFMPEG} ${FFMPEG_OPT} -v warning -i "${my_gold}" -f null - ; RC=$? ;
+    ${G_FFMPEG_BIN} ${FFMPEG_OPT} -v warning -i "${my_gold}" -f null - ; RC=$? ;
   fi # }
 
   if [ ${RC} -ne 0 ] ; then # {
@@ -479,7 +609,7 @@ my_encode_audio_track() { # discard_metadata "${MUSIC_TRACK}" "${TRACK}" "${EXTR
       # We do NOT handle the 'ffmpeg_slice_args' because I don't think there
       # are any audio files (with corrupt metadata) that also have a CUE sheet.
     /bin/rm -f "${temp_out_filename}" ;
-    ${FFMPEG} ${FFMPEG_OPT} \
+    ${G_FFMPEG_BIN} ${FFMPEG_OPT} \
               -i "${audio_filename_in}" \
               -map 0:a -c:a copy -map_metadata -1 -fflags +bitexact \
               "${temp_out_filename}" ;
@@ -526,7 +656,7 @@ my_encode_audio_track() { # discard_metadata "${MUSIC_TRACK}" "${TRACK}" "${EXTR
 
   if [ "${cover_art}" != '' ] ; then # {
     eval set -- "${ffmpeg_extra_metadata}" ;
-    ${FFMPEG} ${FFMPEG_OPT} \
+    ${G_FFMPEG_BIN} ${FFMPEG_OPT} \
               ${ffmpeg_slice_args} \
               -i "${audio_filename_in}" \
               -i "${cover_art}" \
@@ -535,21 +665,26 @@ my_encode_audio_track() { # discard_metadata "${MUSIC_TRACK}" "${TRACK}" "${EXTR
               -metadata:s:v title="Album cover" \
               -metadata:s:v comment="Cover (front)" \
               "$@" -disposition:v attached_pic \
+              ${FFMPEG_ID3} \
           "${audio_filename_out}" ; RC=$? ;
 
-  #############################################################################
-  # This is UNTESTED if artwork already exists with 'ffmpeg_slice_args' non-EMPTY.
+    ###########################################################################
+    # This is UNTESTED if the artwork already exists in the audio track and
+    # 'ffmpeg_slice_args' is non-EMPTY.
   elif [ "${ffmpeg_extra_metadata}" != '' ] ; then # }{
     eval set -- "${ffmpeg_extra_metadata}" ;
-    ${FFMPEG} ${FFMPEG_OPT} \
+    ${G_FFMPEG_BIN} ${FFMPEG_OPT} \
               ${ffmpeg_slice_args} \
               -i "${audio_filename_in}" \
               -map 0:a \
               ${ffmpeg_codec} \
               "$@" \
+              ${FFMPEG_ID3} \
           "${audio_filename_out}" ; RC=$? ;
 
   else # }{
+      #########################################################################
+      #
     /bin/ln "${audio_filename_in}" "${audio_filename_out}" ; RC=$? ;
 
   fi # }
@@ -578,6 +713,8 @@ process_tracks() {
   local extra_metadata="$1" ; shift ;
 
   local my_extraction_dir='./NO_RSYNC' ; # Woops, forgot to re-add this in!
+
+  my_mkdir "${my_extraction_dir}" ;
 
 if [ "${type_ext_in}" = 'ape' -o "${type_ext_in}" = 'mp3' ] ; then # {
 
@@ -681,6 +818,64 @@ fi # } "${TYPE_EXT_IN}" = 'ape'
 
 
 ###############################################################################
+#
+my_usage() {
+  echo 'TODO :: WRITE USAGE!' ;
+}
+
+
+###############################################################################
+#
+# All command line options are __global__ with respect to any song directories.
+#
+# As a stylistic choice, I want to enforce *long options* which require an
+# argument to use the '--option=argument' syntax.  To do this, I set those
+# option's arguments as __optional__.  This causes 'getopt' to only consider
+# an option as having an argument when it is preceded by the '=' character.
+# That is, it always returns an argument for the option and if the argument
+# is an EMPTY string (''), then an "optional" argument was NOT provided.
+# I think this makes the command line easier to read and less error prone.
+#
+process_cmdline_args() {
+
+  local my_flag="$1" ; shift ; # UNUSED right now ...
+
+  # For some reason, making this 'local' does NOT set $? for ‘getopt’. {
+  HS_OPTIONS=`getopt -o h:: \
+      --long help::,\
+ffmpeg::,\
+output_dir:: \
+    -n "${ATTR_ERROR} ${ATTR_BLUE_BOLD}${C_SCRIPT_NAME}${ATTR_YELLOW}" -- "$@"` ; # }
+
+  if [ $? != 0 ] ; then # {
+     my_usage 1 ;
+  fi # }
+
+  eval set -- "${HS_OPTIONS}" ;
+  while true ; do  # {
+    case "$1" in  # {
+    --ffmpeg)
+        G_FFMPEG_BIN="$(check_binary false "$1" "$2")" ;
+        G_OPTION_GLOBAL_MESSAGES="${G_OPTION_GLOBAL_MESSAGES}$(\
+          printf "  ${ATTR_FFMPEG}${ATTR_CLR_BOLD} ‘%s’.\\\n"  \
+                 "${G_FFMPEG_BIN}")" ;
+      shift 2 ;
+      ;;
+    --)
+      shift ;
+      break ;
+      ;;
+    *)
+      echo -n "${ATTR_ERROR} fatal script error - option handler for " ;
+      echo    "'${ATTR_YELLOW_BOLD}$1${ATTR_OFF}' not written!!!" ;
+      echo    "${ATTR_YELLOW_BOLD}Terminating...${ATTR_OFF}" >&2 ; exit 5 ;
+      ;;
+    esac  # }
+  done ;  # }
+
+}
+
+###############################################################################
 ###############################################################################
 #                                   ##    ##
 #    #    #    ##     #   #    #   #        #
@@ -693,11 +888,17 @@ fi # } "${TYPE_EXT_IN}" = 'ape'
 ###############################################################################
 #
 
-if [ $# -eq 1 ] ; then # {
-  DIRECTORY="$1" ; shift ;
-  if [ -x "${DIRECTORY}/Songs.sh" ] ; then # {
-    my_chdir "${DIRECTORY}" ; RC=$? ;
-  fi # }
+init_global_options ;
+process_cmdline_args 0 "$@" ;
+
+
+if [ $# -ne 0 ] ; then # {
+  while [ $# -ne 0 ] ; do # {
+    DIRECTORY="$1" ; shift ;
+    if [ -x "${DIRECTORY}/Songs.sh" ] ; then # {
+      my_chdir "${DIRECTORY}" ; RC=$? ;
+    fi # }
+  done # }
 else # }{
   find . -maxdepth 1 -type d ! -name '.git' ! -name '*IGNORE' | while read DIRECTORY ; do # {
     [ "${DIRECTORY}" = '.' ] && continue ;
