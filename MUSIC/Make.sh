@@ -43,6 +43,13 @@
 # https://stackoverflow.com/questions/965053/extract-filename-and-extension-in-bash
 #   AUDIO_FILE_TYPE="${TRACK##*.}" ;
 #
+#H001 https://stackoverflow.com/questions/21632126/how-to-store-the-output-of-command-in-a-variable-without-creating-a-subshell-ba
+#  >> 'Digital Trauma's answer is clever and should fit my use case ...
+#     https://unix.stackexchange.com/questions/289895/how-to-tell-if-a-character-special-file-would-block-if-read-from
+#  >> The idea for using 'declare -n' for variable substitution ...
+#
+#H002 https://unix.stackexchange.com/questions/14270/get-exit-status-of-process-thats-piped-to-another
+#
 ###############################################################################
 # https://stackoverflow.com/questions/76515791/eyed3-fails-to-run-on-rhel-8-8
 # eyeD3 fails to run on RHEL 8.8
@@ -51,20 +58,22 @@
 # - https://bugzilla.redhat.com/show_bug.cgi?id=1933591
 #   https://bugzilla.redhat.com/attachment.cgi?id=1759946&action=diff
 #
-# According to the "bug report," it fails to run.  I receive the same-ish error
-# message that is in the question, but it will still attach album artwork just
-# fine (which is my use case).  Also, I can't find the cause of the error (I'm
-# not big on python programming).  On what I think is an identical Fedora 37
-# installation (I mean matching _every_ RPM/version) on VirtualBox, I do NOT
-# receive the error message at eyeD3's startup.  The only difference between
-# the two Fedora installations that should NOT matter is that the VirtualBox
+# According to the "bug report," it fails to run, but it works for me for
+# adding artwork to an audio track (which is my use-case).  Debugging this is
+# subtle since it may not be related to the current installation of python/
+# python3-eyed3.  This happens on my "live" desktop system, but I noticed that
+# I did NOT see this on a VirtualBox version of my Fedora 37 desktop which
+# is identical (as best as I can tell) RPM for RPM.  The difference between
+# the Fedora installations (that should NOT matter) is that the VirtualBox
 # installation was updated all at once, while my desktop was incrementally
 # updated over the past 6-7 months.  My theory is that there was a poison
 # update along the way that was not properly cleaned up in its subsequent
-# update(s).
-# (Stands on soap box) Programming is _easy_ -- writing test cases that
-# anticipate real-world use cases and catching regressions with the addition
-# of new features is a paradigm shift few developers can successfully execute.
+# update(s) and thus causes the error message.
+# (Stands on soap box.) Programming is __easy__ -- writing test cases that
+# anticipate real world use cases and ensure that the code base is free of
+# regressions caused with the addition of new features is a paradigm shift
+# few developers can successfully navigate.
+# (Gracefully trips while stepping off soap box.)
 #
 ###############################################################################
 # https://jmesb.com/how_to/create_id3_tags_using_ffmpeg :: IMPORTANT?
@@ -202,6 +211,7 @@ abort() {
 cleanup() {
 
   echo 'CLEANUP -- not yet written' ;
+
 }
 
 
@@ -254,7 +264,87 @@ init_global_options() {
 
   export G_OUTPUT_DIR='./' ;
 
-  export G_FFMPEG_BIN="$(check_binary true '' 'ffmpeg')" ;
+  export G_FFMPEG_BIN="$(check_binary 'success' '' 'ffmpeg')" ;
+  export G_OPTION_GLOBAL_MESSAGES='' ;
+
+  export G_FIFO_FD=19 ; # No special reason for '19' ...
+  export G_FIFO="music$$" ; # H001
+    mkfifo "${G_FIFO}" ;
+    exec 19<> "${G_FIFO}" ;
+      #########################################################################
+      # We no longer need the *name* once we associate it with a FD ...
+    unlink "${G_FIFO}" ;
+}
+
+
+###############################################################################
+#
+my_assign_RESTORE_ME() {
+  local my_var=$1; shift;
+
+  "$@" 2>${G_FIFO} ;
+  read ${my_var} < ${G_FIFO} ;
+  exec 19>&-
+}
+
+
+run_ffmpeg_olde() {
+  local -n _rc=$1 ; shift ;
+  local -n _msg=$1 ; shift;
+
+  local my_temp='' ;
+
+  _msg='' ;
+
+  "$@" 2>${G_FIFO} ;
+  _rc=0 ;
+
+  read my_temp < ${G_FIFO} ;
+  _msg="${_msg} ${my_temp}" ;
+  exec 19>&-
+
+  printf "_msg = '%s'\n" "${_msg}" ;
+}
+
+
+###############################################################################
+#
+# It is NOT humanly possible to error check ffmpeg.  You'd think you could
+# test the binary's exit code, but (as of right now) ffmpeg mostly returns
+# 0 even when there were documented errors encountered during the process.
+# A non-exhaustive list of messages which all produce an exit status of 0:
+#   Error while decoding stream #0:1: Generic error in an external library
+#   [png @ 0x5555e1918240] inflate returned error -3
+#   [mp3 @ 0x55690ced9bc0] Estimating duration from bitrate, this may be inaccurate
+#   [mp3float @ 0x55690cedde00] Header missing
+#   Error while decoding stream #0:0: Invalid data found when processing input
+#   [mp3float @ 0x55befe544d80] big_values too big
+#   [mp3float @ 0x55befe544d80] Error while decoding MPEG audio frame.
+#   Error while decoding stream #0:0: Invalid data found when processing input
+#
+###############################################################################
+# So it seems the best way to determine if there was an error is to check the
+# message stream written to STDERR for one of two things (in addition to the
+# exit code of the ffmpeg process which should be 0):
+# - no messages at all;
+# - a list of acceptable/informational messages.
+# If we read any message that is not in our "approved" list, then that is
+# an error message.  Easy-peasy.
+#
+#
+run_ffmpeg() {
+  local -n _rc=$1 ; shift ;
+  local -n _msg=$1 ; shift;
+
+  local my_temp='' ;
+
+  _msg='' ;
+
+  "$@" 2>&1 | while read my_temp ; do # {
+    printf "<<< '%s' >>>\n" "${my_temp}" ;
+  done # }
+  _rc=${PIPESTATUS[0]} ; # H002
+
 }
 
 
@@ -405,14 +495,19 @@ my_check_audio_file() { # "${TRACK}" ;
       printf "${ATTR_OFF}\n" ;
     fi # }
   elif [ "${AUDIO_FILE_TYPE}" = 'mp3' ] ; then # }{
+    # H001
     printf "${ATTR_BOLD}Verifing '${ATTR_CLR_BOLD}$(tput setab 9)${my_audio_file}${ATTR_CLR_BOLD}' .${ATTR_OFF}" ;
-    ${G_FFMPEG_BIN} ${FFMPEG_OPT} -v warning -i "${my_audio_file}" -f null - ; RC=$? ;
+### ${G_FFMPEG_BIN} ${FFMPEG_OPT} -v warning -i "${my_audio_file}" -f null - ; RC=$? ;
+    run_ffmpeg 'RC' 'my_msg' ${G_FFMPEG_BIN} ${FFMPEG_OPT} -v warning -i "${my_audio_file}" -f null - ;
     if [ ${RC} -ne 0 ] ; then # {
-      printf "${ATTR_BOLD}..${ATTR_RED_BOLD} FAILED!" ;
+      printf "${ATTR_CLR_BOLD}.. RC=%d, ${ATTR_RED_BOLD} FAILED!" ${RC} ;
       printf "${ATTR_OFF}\n" ;
       exit ${ERROR_FLAC_T} ;
     else # }{
-      printf "${ATTR_BOLD}..${ATTR_GREEN_BOLD} SUCCESS!" ;
+      if [ "${my_msg}" != '' ] ; then # {
+        my_msg="'${ATTR_CYAN}$(echo "${my_msg}" | sed -e 's/[[].*] //')${ATTR_CLR_BOLD}' " ;
+      fi # }
+      printf "${ATTR_CLR_BOLD}.. %s${ATTR_GREEN_BOLD}SUCCESS!" "${my_msg}" ;
       printf "${ATTR_OFF}\n" ;
     fi # }
   else # }{
@@ -855,7 +950,7 @@ output_dir:: \
   while true ; do  # {
     case "$1" in  # {
     --ffmpeg)
-        G_FFMPEG_BIN="$(check_binary false "$1" "$2")" ;
+        G_FFMPEG_BIN="$(check_binary 'quiet?' "$1" "$2")" ;
         G_OPTION_GLOBAL_MESSAGES="${G_OPTION_GLOBAL_MESSAGES}$(\
           printf "  ${ATTR_FFMPEG}${ATTR_CLR_BOLD} ‘%s’.\\\n"  \
                  "${G_FFMPEG_BIN}")" ;
@@ -891,6 +986,7 @@ output_dir:: \
 init_global_options ;
 process_cmdline_args 0 "$@" ;
 
+echo -ne "${G_OPTION_GLOBAL_MESSAGES}" ;
 
 if [ $# -ne 0 ] ; then # {
   while [ $# -ne 0 ] ; do # {
