@@ -68,7 +68,20 @@ GLOBAL_LOGs=1 ; # Set to '1' if the log file in a subdirectory is wanted
                # about any log file in the root directory of the archive.
 GLOBAL_EXCLUDEs='_thumb[.]|[.]thumbs|[.]xml|[.]sqlite' ;
 LOCAL_EXCLUDEs='' ; # Set to an egrep regexp to exclude other filenames.
+      # ❗ Note, the "string" must be formatted as it appears in the html
+      #    from the web page, i.e. ' ' should be '%20'.  This is annoying!
+      #    Fortunately, the use case for this is generally limited to
+      #    embedded SPACE characters - there may be others.  This script uses
+      #    a sed command to convert these character(s) and only handles the
+      #    SPACE character (other will be added as needed / discovered).
+      #    Example - '01 RAQUEL WELCH.mp4' will become
+      #              '01%20RAQUEL%20WELCH.mp4' to correctly match what's in
+      #              the html (if the user wishes to exclude that download).
+      #              REF :: https://archive.org/details/roustabout-1964
 LOCAL_EXCLUDEs='[.]mp3$' ;
+#LOCAL_EXCLUDEs+='|[.]ia[.]mp4' ; # Also set the above 'LOCAL_MP4s=1' ...
+
+LOCAL_EXCLUDEs="$(echo "${LOCAL_EXCLUDEs}" | sed -e 's/ /%20/g')" ; # HACK!
 
 HTML_DIR='./Html' ; # Used to save the html pages that we parse for the files.
 DONE_DIR='./.DONE' ; # an entry is made if the link is fully retrieved.
