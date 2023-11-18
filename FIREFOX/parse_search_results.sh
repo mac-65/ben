@@ -113,12 +113,18 @@ fi
                             -e 's/ - [0-9][0-9]* ([1-9][0-9]*[a-z]).*$//' \
                             -e "s/'/’/g")" ;
         TARGET_DIR_FOR_MSG="${TARGET_DIR}" ;
-        TARGET_DIR="$(ls -d "${TARGET_DIR}"* 2>/dev/null)" ; RC=$? ;
+        ls -d "${TARGET_DIR}"* >/dev/null 2>&1 ; RC=$? ;
         if [ ${RC} -ne 0 ] ; then # {
           printf "  $(tput setab 1; tput bold)SKIPPING$(tput sgr0; tput bold) '$(tput setaf 5)%s$(tput setaf 3)'" \
                  "${TARGET_DIR_FOR_MSG}" ;
           printf "$(tput sgr0; tput bold), is NOT configured this season.\n" ;
           continue ;
+        else # }{
+          #####################################################################
+          # (I'm pretty sure there's a way to test if just the 'ls' failed,
+          # but I'm feeling a little lazy right now 🤪.)
+          #
+          TARGET_DIR="$(ls -d "${TARGET_DIR}"* 2>/dev/null | head -1)" ; RC=$? ;
         fi # }
       else # }{
         TARGET_DIR='.' ;
@@ -129,7 +135,10 @@ fi
       # __this__ script to save some time.
       #
       pushd "${TARGET_DIR}" >/dev/null 2>&1 \
-        || { printf "  $(tput setaf 1; tput bold)FATAL ERROR!$(tput sgr0)\n" ; exit 2; };
+        || { printf "  $(tput setaf 1; tput bold)FATAL ERROR!$(tput sgr0; tput bold) -- " ; \
+             printf "Can't pushd '${TARGET_DIR}'\n" ; \
+             exit 2; \
+           };
 
       MY_TEST_NAME="./files/${RESULT_LINK_TITLE}.torrent" ;
       if [ -s "${MY_TEST_NAME}" ] ; then # {
