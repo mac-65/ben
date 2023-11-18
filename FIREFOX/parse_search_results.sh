@@ -3,10 +3,12 @@
 
 SEARCH_RESULT_DIR='./SEARCH_RESULTs' ;
 ARG_COUNT=$# ;
+MY_DEBUG=0 ; # ... turns off the clean-up  parts for the HTML file.
 
 ###############################################################################
 # A quick and dirty hack to limit the number of results we parse ...
 # The maximum amount on the search results page are 75 records.
+# Setting this on the CLI limits this script to the first X results.
 #
 MY_REGX='^[0-9]+$' ;
 PARSE_COUNT_LIMIT=99 ;
@@ -15,7 +17,7 @@ if [[ ${ARG_COUNT} -gt 0 && "$1" =~ ${MY_REGX} ]] ; then # {
 fi ; # }
 
 ###############################################################################
-# Perform some simple validation ...
+# Perform some very simple validation ...
 #
 ARG_COUNT=$# ;
 if [[ ${ARG_COUNT} -eq 0 || ( ${ARG_COUNT} -eq 1 && "$1" = '-h' ) ]] ; then # {
@@ -58,7 +60,7 @@ fi # }
 
 CLEANUP_DIR="$(basename "${RESULT_FILE}" '.html')_files" ;
 if [ -d "${CLEANUP_DIR}" ] ; then
-  /bin/rm -rf "./${CLEANUP_DIR}" ;
+  [[ ${MY_DEBUG} -eq 0 ]] && /bin/rm -rf "./${CLEANUP_DIR}" ;
 else
   printf "$(tput setaf 1; tput bold)NOTICE!$(tput sgr0; tput bold)%s '$(tput setaf 3)%s$(tput sgr0; tput bold)', %s$(tput sgr0)" \
      '  This script already ran for' "${RESULT_FILE}" 'Continue [yN]? ' ;
@@ -79,6 +81,18 @@ fi
    | while read RESULT_LINE ; do # {
 ##    printf "$(tput bold)<< $(tput sgr0; tput setaf 3)%s $(tput sgr0; tput bold)>>$(tput sgr0)\n" "${RESULT_LINE}" ;
 
+      #########################################################################
+      # Check the limit count *here* instead of the bottom of the loop to
+      # include series which may not have been set up.  I was kinda on the
+      # fence about this -- should the count __only__ mean just active series?
+      #
+      (( PARSE_COUNT_LIMIT -= 1 )) ;
+      if [ ${PARSE_COUNT_LIMIT} -lt 0 ] ; then # {
+
+        printf "$(tput bold; tput setaf 5)BREAKING LOOP ...$(tput sgr0)\n"
+        break ;
+      fi # }
+
       RESULT_LINK="$(echo "${RESULT_LINE}" \
                    | sed -e 's/^.*<a href="//' \
                          -e 's/" title=".*$//' \
@@ -92,18 +106,18 @@ fi
 
       #########################################################################
       # Isolate the target directory from the name and see if it's there ...
-      # DIR="$(ls -d 'One Piece'*)" ; echo "'${DIR}'"
       #
       if [ ${HAVE_FILES} -eq 0 ] ; then # {
         TARGET_DIR="$(echo "${RESULT_LINK_TITLE}" \
                       | sed -e 's/^[[][A-Za-z][A-Za-z]*] //' \
                             -e 's/ - [0-9][0-9]* ([1-9][0-9]*[a-z]).*$//' \
                             -e "s/'/’/g")" ;
-        TARGET_DIR="$(ls -d "${TARGET_DIR}"*)" ; RC=$? ;
+        TARGET_DIR_FOR_MSG="${TARGET_DIR}" ;
+        TARGET_DIR="$(ls -d "${TARGET_DIR}"* 2>/dev/null)" ; RC=$? ;
         if [ ${RC} -ne 0 ] ; then # {
-          printf "  $(tput setaf 3; tput bold)SKIPPING '$(tput setaf 5)%s$(tput setaf 3)'" \
-                 "${TARGET_DIR}" ;
-          printf "$(tput sgr0; tput bold), does NOT exist for this season.\n" ;
+          printf "  $(tput setab 1; tput bold)SKIPPING$(tput sgr0; tput bold) '$(tput setaf 5)%s$(tput setaf 3)'" \
+                 "${TARGET_DIR_FOR_MSG}" ;
+          printf "$(tput sgr0; tput bold), is NOT configured this season.\n" ;
           continue ;
         fi # }
       else # }{
@@ -123,30 +137,32 @@ fi
                "$(basename "${MY_TEST_NAME}")" ;
         printf "$(tput sgr0; tput bold), already in './files'\n" ;
       else # }{
-        printf "  $(tput bold)GETTING '$(tput setaf 2)%s$(tput sgr0; tput bold)'$(tput sgr0)\n" \
+        printf "  $(tput bold)TRYING '$(tput setaf 2)%s$(tput sgr0; tput bold)'$(tput sgr0)\n" \
                "${RESULT_LINK_TITLE}"
         if [ ${DRY_RUN} -eq 0 ] ; then # {
- :          st.sh "${RESULT_LINK}" "${RESULT_LINK_TITLE}" ;
+           if [ ${MY_DEBUG} -eq 0 ] ; then
+              st.sh "${RESULT_LINK}" "${RESULT_LINK_TITLE}" ;
+           else # }{
+              printf "    PWD = '%s'\n" "$(pwd)" ;
+              echo '    ==> ' st.sh "'${RESULT_LINK}'" "'${RESULT_LINK_TITLE}'" ;
+           fi # }
         fi # }
       fi # }
 
       popd >/dev/null 2>&1 ;
 
-   (( PARSE_COUNT_LIMIT -= 1 )) ;
-   if [ ${PARSE_COUNT_LIMIT} -lt 1 ] ; then # {
-
-     printf "$(tput bold; tput setaf 5)BREAKING LOOP ...$(tput sgr0)\n"
-     break ;
-   fi # }
-
  done # }
 
- if [ -d "${SEARCH_RESULT_DIR}" ] ; then # {
+ ##############################################################################
+ # Yeah, we __always__ have a 'SEARCH_RESULT_DIR'; it's just how it evolved ...
+ #
+ if [[ ${MY_DEBUG} -eq 0 && -d "${SEARCH_RESULT_DIR}" ]] ; then # {
    printf "$(tput bold)SAVING '$(tput setaf 3)${RESULT_FILE}$(tput sgr0; tput bold)' .."
    MY_SAVE_BASE="$(basename "${RESULT_FILE}" '.html')" ;
    # The date timestamp should absolutely make collisions impossible!
    /bin/mv "${RESULT_FILE}" "${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}-‘$(date)’.html" ;
-   printf ". $(tput setaf 2)COMPLETE!\n" ;
-   tput sgr0 ;
+ else # }{
+   printf "$(tput bold)DEBUG RUN IS .." ;
  fi # }
+ printf ". $(tput setaf 2)COMPLETE!\n" ; tput sgr0 ;
 
