@@ -15,6 +15,7 @@ PARSE_COUNT_LIMIT=99 ;
 if [[ ${ARG_COUNT} -gt 0 && "$1" =~ ${MY_REGX} ]] ; then # {
    PARSE_COUNT_LIMIT="$1" ; shift ;
 fi ; # }
+PARSE_COUNT_LIMIT_INITIAL=${PARSE_COUNT_LIMIT} ;
 
 ###############################################################################
 # Perform some very simple validation ...
@@ -112,11 +113,10 @@ fi
                       | sed -e 's/^[[][A-Za-z][A-Za-z]*] //' \
                             -e 's/ - [0-9][0-9]* ([1-9][0-9]*[a-z]).*$//' \
                             -e "s/'/’/g")" ;
-        TARGET_DIR_FOR_MSG="${TARGET_DIR}" ;
         ls -d "${TARGET_DIR}"* >/dev/null 2>&1 ; RC=$? ;
         if [ ${RC} -ne 0 ] ; then # {
           printf "  $(tput setab 1; tput bold)SKIPPING$(tput sgr0; tput bold) '$(tput setaf 5)%s$(tput setaf 3)'" \
-                 "${TARGET_DIR_FOR_MSG}" ;
+                 "${TARGET_DIR}" ;
           printf "$(tput sgr0; tput bold), is NOT configured this season.\n" ;
           continue ;
         else # }{
@@ -124,7 +124,7 @@ fi
           # (I'm pretty sure there's a way to test if just the 'ls' failed,
           # but I'm feeling a little lazy right now 🤪.)
           #
-          TARGET_DIR="$(ls -d "${TARGET_DIR}"* 2>/dev/null | head -1)" ; RC=$? ;
+          TARGET_DIR="$(ls -d "${TARGET_DIR}"* 2>/dev/null | head -1)" ;
         fi # }
       else # }{
         TARGET_DIR='.' ;
@@ -169,7 +169,8 @@ fi
    printf "$(tput bold)SAVING '$(tput setaf 3)${RESULT_FILE}$(tput sgr0; tput bold)' .."
    MY_SAVE_BASE="$(basename "${RESULT_FILE}" '.html')" ;
    # The date timestamp should absolutely make collisions impossible!
-   /bin/mv "${RESULT_FILE}" "${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}-‘$(date)’.html" ;
+   /bin/mv "${RESULT_FILE}" \
+       "${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}-[${PARSE_COUNT_LIMIT_INITIAL}]-‘$(date)’.html" ;
  else # }{
    printf "$(tput bold)DEBUG RUN IS .." ;
  fi # }
