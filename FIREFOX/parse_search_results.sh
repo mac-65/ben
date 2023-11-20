@@ -166,11 +166,20 @@ fi
  # Yeah, we __always__ have a 'SEARCH_RESULT_DIR'; it's just how it evolved ...
  #
  if [[ ${MY_DEBUG} -eq 0 && -d "${SEARCH_RESULT_DIR}" ]] ; then # {
-   printf "$(tput bold)SAVING '$(tput setaf 3)${RESULT_FILE}$(tput sgr0; tput bold)' .."
    MY_SAVE_BASE="$(basename "${RESULT_FILE}" '.html')" ;
+   ############################################################################
    # The date timestamp should absolutely make collisions impossible!
-   /bin/mv "${RESULT_FILE}" \
+   # ALSO, we ensure that, in the event we re-ran a search results file,
+   # we don't try to overwrite it with itself ...
+   #
+   if [ ! -s "${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}.html" ] ; then # {
+     printf "$(tput bold)SAVING '$(tput setaf 3)${RESULT_FILE}$(tput sgr0; tput bold)' .." ;
+     /bin/mv "${RESULT_FILE}" \
        "${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}-[${PARSE_COUNT_LIMIT_INITIAL}]-‘$(date)’.html" ;
+   else # }{
+     printf "$(tput bold)RE-RUN OF '$(tput setaf 6)%s$(tput sgr0; tput bold)' IS .." \
+       "${MY_SAVE_BASE}.html" ;
+   fi # }
  else # }{
    printf "$(tput bold)DEBUG RUN IS .." ;
  fi # }
