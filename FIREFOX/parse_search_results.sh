@@ -20,18 +20,23 @@ PARSE_COUNT_LIMIT_INITIAL=${PARSE_COUNT_LIMIT} ;
 ###############################################################################
 # Perform some very simple validation ...
 #
+RESULT_FILE='' ;
 ARG_COUNT=$# ;
 if [[ ${ARG_COUNT} -eq 0 || ( ${ARG_COUNT} -eq 1 && "$1" = '-h' ) ]] ; then # {
-   printf "Usage:\n  %s  $(tput setaf 3)%s$(tput sgr0)\n" \
-          "$(basename $0)" \
-          'results.html' ;
-   printf "Where $(tput setaf 3)%s$(tput sgr0) are the search results from $(tput bold)Firefox’s $(tput setaf 5)%s$(tput sgr0)\n" \
-          'results.html' \
-          'Save Page As…' ;
-   printf "Also, the directory '$(tput setaf 6)%s$(tput sgr0)' is made if it does not exist\n (for saving the search result’s file)." \
-          "${SEARCH_RESULT_DIR}" ;
-   echo ; echo ;
-   exit 1;
+  if [ ! -s *html ] ; then # {
+    printf "Usage:\n  %s  $(tput setaf 3)%s$(tput sgr0)\n" \
+           "$(basename $0)" \
+           'results.html' ;
+    printf "Where $(tput setaf 3)%s$(tput sgr0) are the search results from $(tput bold)Firefox’s $(tput setaf 5)%s$(tput sgr0)\n" \
+           'results.html' \
+           'Save Page As…' ;
+    printf "Also, the directory '$(tput setaf 6)%s$(tput sgr0)' is made if it does not exist\n (for saving the search result’s file)." \
+            "${SEARCH_RESULT_DIR}" ;
+    echo ; echo ;
+    exit 1;
+  else # }{
+    RESULT_FILE="$(echo -ne *html)" ;
+  fi ; # }
 elif [ "${MY_PARSE_HTML}" = '' ] ; then # }{
    printf "$(tput setaf 1; tput bold)ERROR$(tput sgr0) -- " ; \
    printf "$(tput bold)'$(tput setab 4)MY_PARSE_HTML$(tput sgr0; tput bold)' " ; \
@@ -40,7 +45,9 @@ elif [ "${MY_PARSE_HTML}" = '' ] ; then # }{
 fi # }
 
 ###############################################################################
-RESULT_FILE="$1" ; shift ; # This is the {Firefox} saved search results page.
+if [ "${RESULT_FILE}" = '' ] ; then
+  RESULT_FILE="$1" ; shift ; # This is the {Firefox} saved search results page.
+fi
 DRY_RUN=0 ; # TODO :: set from CLI
 
 if [ ! -d "${SEARCH_RESULT_DIR}" ] ; then # {
