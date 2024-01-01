@@ -5,6 +5,9 @@ SEARCH_RESULT_DIR='./SEARCH_RESULTs' ;
 ARG_COUNT=$# ;
 MY_DEBUG=0 ; # ... turns off the clean-up  parts for the HTML file.
 
+MY_GZIP='/usr/bin/gzip' ;
+MY_ZCAT='/usr/bin/zcat --force' ;
+
 ###############################################################################
 # A quick and dirty hack to limit the number of results we parse ...
 # The maximum amount on the search results page are 75 records.
@@ -113,13 +116,22 @@ fi
                          -e 's/">.*//')"
 
       #########################################################################
-      # Isolate the target directory from the name and see if it's there ...
+      # Isolate the target directory from the name and see if it’s there ...
       #
       if [ ${HAVE_FILES} -eq 0 ] ; then # {
-        TARGET_DIR="$(echo "${RESULT_LINK_TITLE}" \
+        if false ; then # {
+          TARGET_DIR="$(echo "${RESULT_LINK_TITLE}" \
                       | sed -e 's/^[[][A-Za-z][A-Za-z]*] //' \
                             -e 's/ - [0-9][0-9]* ([1-9][0-9]*[a-z]).*$//' \
                             -e "s/'/’/g")" ;
+        else # }{
+            ###################################################################
+            # The 3rd part of the regx may do nothing for unnumbered episodes.
+          TARGET_DIR="$(echo "${RESULT_LINK_TITLE}" \
+                      | sed -e 's/^[[][A-Za-z][A-Za-z]*] //' \
+                            -e 's/ ([1-9][0-9]*[a-z]) [[][0-9A-F]*[]]....$//' \
+                            -e 's/ - [0-9][0-9]*$//')" ;
+        fi # }
         ls -d "${TARGET_DIR}"* >/dev/null 2>&1 ; RC=$? ;
         if [ ${RC} -ne 0 ] ; then # {
           printf "  $(tput setab 1; tput bold)SKIPPING$(tput sgr0; tput bold) '$(tput setaf 5)%s$(tput setaf 3)'" \
@@ -181,8 +193,8 @@ fi
    #
    if [ ! -s "${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}.html" ] ; then # {
      printf "$(tput bold)SAVING '$(tput setaf 3)${RESULT_FILE}$(tput sgr0; tput bold)' .." ;
-     /bin/mv "${RESULT_FILE}" \
-       "${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}-[${PARSE_COUNT_LIMIT_INITIAL}]-‘$(date)’.html" ;
+     SEARCH_RESULT_FILE="${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}-[${PARSE_COUNT_LIMIT_INITIAL}]-‘$(date)’.html" ;
+     /bin/mv "${RESULT_FILE}" "${SEARCH_RESULT_FILE}" ;
    else # }{
      printf "$(tput bold)RE-RUN OF '$(tput setaf 6)%s$(tput sgr0; tput bold)' IS .." \
        "${MY_SAVE_BASE}.html" ;
