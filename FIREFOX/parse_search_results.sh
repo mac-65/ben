@@ -3,10 +3,19 @@
 
 SEARCH_RESULT_DIR='./SEARCH_RESULTs' ;
 ARG_COUNT=$# ;
-MY_DEBUG=0 ; # ... turns off the clean-up  parts for the HTML file.
 
 MY_GZIP='/usr/bin/gzip' ;
 MY_ZCAT='/usr/bin/zcat --force' ;
+
+HELPER_SCRIPT='st.sh' ; # Call an external script to load the torrent file.
+
+###############################################################################
+# A quick and dirty hack to enable a DEBUG state ...
+#
+MY_DEBUG=0 ; # ... turns off the clean-up  parts for the HTML file.
+if [[ ${ARG_COUNT} -gt 0 && "$1" = '-debug' ]] ; then # {
+   MY_DEBUG=1 ; shift ;
+fi ; # }
 
 ###############################################################################
 # A quick and dirty hack to limit the number of results we parse ...
@@ -18,7 +27,7 @@ PARSE_COUNT_LIMIT=99 ;
 if [[ ${ARG_COUNT} -gt 0 && "$1" =~ ${MY_REGX} ]] ; then # {
    PARSE_COUNT_LIMIT="$1" ; shift ;
 fi ; # }
-PARSE_COUNT_LIMIT_INITIAL=${PARSE_COUNT_LIMIT} ;
+PARSE_COUNT_LIMIT_INITIAL=${PARSE_COUNT_LIMIT} ; # So we can note the value ...
 
 ###############################################################################
 # Perform some very simple validation ...
@@ -70,27 +79,29 @@ fi # }
 
 
 CLEANUP_DIR="$(basename "${RESULT_FILE}" '.html')_files" ;
-if [ -d "${CLEANUP_DIR}" ] ; then
+if [ -d "${CLEANUP_DIR}" ] ; then # {{
   [[ ${MY_DEBUG} -eq 0 ]] && /bin/rm -rf "./${CLEANUP_DIR}" ;
-else
+else # }{
   printf "$(tput setaf 1; tput bold)NOTICE!$(tput sgr0; tput bold)%s '$(tput setaf 3)%s$(tput sgr0; tput bold)', %s$(tput sgr0)" \
      '  This script already ran for' "${RESULT_FILE}" 'Continue [yN]? ' ;
   read ANS ; my_regx='[Yy]' ;
-  if [[ "${ANS}" =~ $my_regx ]] ; then
+  if [[ "${ANS}" =~ $my_regx ]] ; then # {{
 #-  echo 'SUCCESS, CONTINUE' ;
     printf "$(tput setaf 2; tput bold)CONTINUING $(tput sgr0)...\n"
-  else
+  else # }{
     echo 'ABORTED BY USER ...' ;
     exit 0;
-  fi
-fi
+  fi # }}
+fi # }}
 
 # MY_PARSE_HTML must be set in .bashrc or .profile ...
  cat "${RESULT_FILE}" \
    | egrep -v 'class="comments"' \
    | grep "${MY_PARSE_HTML}" \
    | while read RESULT_LINE ; do # {
-##    printf "$(tput bold)<< $(tput sgr0; tput setaf 3)%s $(tput sgr0; tput bold)>>$(tput sgr0)\n" "${RESULT_LINE}" ;
+
+      [ ${MY_DEBUG} -eq 1 ] && \
+        printf "   $(tput sgr0)[%d] '%s'\n" ${LINENO} "${RESULT_LINE}" ;
 
       #########################################################################
       # Check the limit count *here* instead of the bottom of the loop to
@@ -109,7 +120,7 @@ fi
                          -e 's/" title=".*$//' \
                          -e 's#/view/#/download/#' \
                          -e 's/$/.torrent/')" ;
-##    printf "  '%s'\n" "${RESULT_LINK}"
+      [ ${MY_DEBUG} -eq 1 ] && printf "   [%d] '%s'\n" ${LINENO} "${RESULT_LINK}"
 
       RESULT_LINK_TITLE="$(echo "${RESULT_LINE}" \
                    | sed -e 's/^.* title="//' \
@@ -118,8 +129,8 @@ fi
       #########################################################################
       # Isolate the target directory from the name and see if it’s there ...
       #
-      if [ ${HAVE_FILES} -eq 0 ] ; then # {
-        if false ; then # {
+      if [ ${HAVE_FILES} -eq 0 ] ; then # {{
+        if false ; then # {{
           TARGET_DIR="$(echo "${RESULT_LINK_TITLE}" \
                       | sed -e 's/^[[][A-Za-z][A-Za-z]*] //' \
                             -e 's/ - [0-9][0-9]* ([1-9][0-9]*[a-z]).*$//' \
@@ -128,12 +139,12 @@ fi
             ###################################################################
             # The 3rd part of the regx may do nothing for unnumbered episodes.
           TARGET_DIR="$(echo "${RESULT_LINK_TITLE}" \
-                      | sed -e 's/^[[][A-Za-z][A-Za-z]*] //' \
-                            -e 's/ ([1-9][0-9]*[a-z]) [[][0-9A-F]*[]]....$//' \
-                            -e 's/ - [0-9][0-9]*$//')" ;
-        fi # }
+                   | sed -e 's/^[[][A-Za-z][A-Za-z]*] //' \
+                         -e 's/ ([1-9][0-9]*[a-z]) [[][0-9A-F]*[]]....$//' \
+                         -e 's/ - [0-9][0-9]*[.]*[5]*$//')" ; # recaps, too.
+        fi # }}
         ls -d "${TARGET_DIR}"* >/dev/null 2>&1 ; RC=$? ;
-        if [ ${RC} -ne 0 ] ; then # {
+        if [ ${RC} -ne 0 ] ; then # {{
           printf "  $(tput setab 1; tput bold)SKIPPING$(tput sgr0; tput bold) '$(tput setaf 5)%s$(tput setaf 3)'" \
                  "${TARGET_DIR}" ;
           printf "$(tput sgr0; tput bold), is NOT configured this season.\n" ;
@@ -144,14 +155,14 @@ fi
           # but I'm feeling a little lazy right now 🤪.)
           #
           TARGET_DIR="$(ls -d "${TARGET_DIR}"* 2>/dev/null | head -1)" ;
-        fi # }
+        fi # }}
       else # }{
         TARGET_DIR='.' ;
-      fi # }
+      fi # }}
 
       #########################################################################
-      # The 'st.sh' script always uses './files', so let's check it outside of
-      # __this__ script to save some time.
+      # The "helper" script always uses './files', so let’s check it outside
+      # of __this__ script to save some time.
       #
       pushd "${TARGET_DIR}" >/dev/null 2>&1 \
         || { printf "  $(tput setaf 1; tput bold)FATAL ERROR!$(tput sgr0; tput bold) -- " ; \
@@ -160,7 +171,7 @@ fi
            };
 
       MY_TEST_NAME="./files/${RESULT_LINK_TITLE}.torrent" ;
-      if [ -s "${MY_TEST_NAME}" ] ; then # {
+      if [ -s "${MY_TEST_NAME}" ] ; then # {{
         printf "  $(tput setaf 3; tput bold)SKIPPING '$(tput setaf 5)%s$(tput setaf 3)'" \
                "$(basename "${MY_TEST_NAME}")" ;
         printf "$(tput sgr0; tput bold), already in './files'\n" ;
@@ -168,14 +179,21 @@ fi
         printf "  $(tput bold)TRYING '$(tput setaf 2)%s$(tput sgr0; tput bold)'$(tput sgr0)\n" \
                "${RESULT_LINK_TITLE}"
         if [ ${DRY_RUN} -eq 0 ] ; then # {
-           if [ ${MY_DEBUG} -eq 0 ] ; then
-              st.sh "${RESULT_LINK}" "${RESULT_LINK_TITLE}" ;
+           if [ ${MY_DEBUG} -eq 0 ] ; then # {{
+              ${HELPER_SCRIPT} "${RESULT_LINK}" "${RESULT_LINK_TITLE}" ;
            else # }{
-              printf "    PWD = '%s'\n" "$(pwd)" ;
-              echo '    ==> ' st.sh "'${RESULT_LINK}'" "'${RESULT_LINK_TITLE}'" ;
-           fi # }
+              printf "  $(tput bold)>> PWD $(tput setab 4; tput setaf 3)'%s'%s\n" \
+                     "$(pwd)" "$(tput sgr0)" ;
+              printf "     $(tput bold)==> $(tput setaf 5)%s$(tput sgr0)" \
+                     "${HELPER_SCRIPT}" ;
+              printf " $(tput bold)'$(tput setaf 3)%s$(tput sgr0; tput bold)'$(tput sgr0)" \
+                     "${RESULT_LINK}" ;
+              printf " $(tput bold)'$(tput setaf 3)%s$(tput sgr0; tput bold)'$(tput sgr0)" \
+                     "${RESULT_LINK_TITLE}" ;
+              echo ; tput sgr0 ;
+           fi # }}
         fi # }
-      fi # }
+      fi # }}
 
       popd >/dev/null 2>&1 ;
 
@@ -184,23 +202,24 @@ fi
  ##############################################################################
  # Yeah, we __always__ have a 'SEARCH_RESULT_DIR'; it's just how it evolved ...
  #
- if [[ ${MY_DEBUG} -eq 0 && -d "${SEARCH_RESULT_DIR}" ]] ; then # {
+ if [[ ${MY_DEBUG} -eq 0 && -d "${SEARCH_RESULT_DIR}" ]] ; then # {{
    MY_SAVE_BASE="$(basename "${RESULT_FILE}" '.html')" ;
    ############################################################################
    # The date timestamp should absolutely make collisions impossible!
    # ALSO, we ensure that, in the event we re-ran a search results file,
    # we don't try to overwrite it with itself ...
    #
-   if [ ! -s "${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}.html" ] ; then # {
+   if [ ! -s "${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}.html" ] ; then # {{
      printf "$(tput bold)SAVING '$(tput setaf 3)${RESULT_FILE}$(tput sgr0; tput bold)' .." ;
      SEARCH_RESULT_FILE="${SEARCH_RESULT_DIR}/${MY_SAVE_BASE}-[${PARSE_COUNT_LIMIT_INITIAL}]-‘$(date)’.html" ;
      /bin/mv "${RESULT_FILE}" "${SEARCH_RESULT_FILE}" ;
    else # }{
      printf "$(tput bold)RE-RUN OF '$(tput setaf 6)%s$(tput sgr0; tput bold)' IS .." \
        "${MY_SAVE_BASE}.html" ;
-   fi # }
+   fi # }}
  else # }{
    printf "$(tput bold)DEBUG RUN IS .." ;
- fi # }
+ fi # }}
+
  printf ". $(tput setaf 2)COMPLETE!\n" ; tput sgr0 ;
 
