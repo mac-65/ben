@@ -122,9 +122,13 @@ fi # }}
                          -e 's/$/.torrent/')" ;
       [ ${MY_DEBUG} -eq 1 ] && printf "   [%d] '%s'\n" ${LINENO} "${RESULT_LINK}"
 
+      #########################################################################
+      # Also, convert any miscellaneous html encodings back to UTF-8 (&amp;).
+      #
       RESULT_LINK_TITLE="$(echo "${RESULT_LINE}" \
                    | sed -e 's/^.* title="//' \
-                         -e 's/">.*//')"
+                         -e 's/">.*//' \
+                         -e 's/&amp;/\&/g')" ;
 
       #########################################################################
       # Isolate the target directory from the name and see if it’s there ...
@@ -221,5 +225,7 @@ fi # }}
    printf "$(tput bold)DEBUG RUN IS .." ;
  fi # }}
 
- printf ". $(tput setaf 2)COMPLETE!\n" ; tput sgr0 ;
+printf ". $(tput setaf 2)COMPLETE!\n" ; tput sgr0 ;
+
+exit 0;
 
