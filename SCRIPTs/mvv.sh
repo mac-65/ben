@@ -53,9 +53,18 @@ while [ $# -gt 0 ] ; do # {
   echo "${SRC_PATHNAME}" | /bin/grep -q 'NO_RSYNC/' ; RC=$? ;
   if [ ${RC} -eq 0 ] ; then MY_OP="${MY_CP}" ; else MY_OP="${MY_LN}" ; fi ;
 
-  printf "$(tput bold)%s$(tput sgr0) '$(tput setaf 3)%s$(tput sgr0)' '$(tput setaf 4;tput bold)%s$(tput sgr0)'\n" \
-      "${MY_OP}" "${SRC_PATHNAME}" "${DST_NAME}" ;
+  if [ -s "${SRC_PATHNAME}" ] ; then # {{
+
+    printf "$(tput bold)%s$(tput sgr0) '$(tput setaf 3)%s$(tput sgr0)' " \
+           "${MY_OP}" "${SRC_PATHNAME}" ;
+    printf "'$(tput setaf 4;tput bold)%s$(tput sgr0)'\n" \
+           "${DST_NAME}" ;
     ${MY_OP} "${SRC_PATHNAME}" "${DST_NAME}" ;
+  else # }{
+    printf "$(tput setaf 1; tput bold)ERROR -$(tput sgr0) "
+    printf "Can’t stat $(tput bold)‘$(tput sgr0; tput setaf 3)%s$(tput sgr0; tput bold)’$(tput sgr0).\n" \
+           "${SRC_PATHNAME}" ;
+  fi # }}
 done # }
 
 exit 0;
