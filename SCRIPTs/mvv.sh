@@ -62,7 +62,7 @@ while [ $# -gt 0 ] ; do # {
     ${MY_OP} "${SRC_PATHNAME}" "${DST_NAME}" ;
   else # }{
     printf "$(tput setaf 1; tput bold)ERROR -$(tput sgr0) "
-    printf "Can’t stat $(tput bold)‘$(tput sgr0; tput setaf 3)%s$(tput sgr0; tput bold)’$(tput sgr0).\n" \
+    printf "Can’t stat $(tput bold)‘$(tput sgr0; tput setaf 6)%s$(tput sgr0; tput bold)’$(tput sgr0).\n" \
            "${SRC_PATHNAME}" ;
   fi # }}
 done # }
