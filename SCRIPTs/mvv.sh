@@ -8,7 +8,11 @@ HS1_CHARACTERS='‘’∕“”…' ;
 #
 usage() {
   printf "$(tput setaf 1; tput bold)Error -$(tput sgr0) %s.\n" "$1" ;
-  printf 'Usage -\n  %s\n' "$(basename "$0")" ;
+  printf 'Usage -\n  %s [-p description] [#] source_pathnames\n' "$(basename "$0")" ;
+  printf '   -p - prefix the destination filename with this description.\n' ;
+  printf '   #  - number of components of source pathname to use\n%s\n' \
+         '        (default is 1, which is the basename).' ;
+  printf '      - Note, option are checked in the order listed.\n' ;
 }
 
 ###############################################################################
@@ -28,8 +32,17 @@ if [[ $# -gt 0 && "$1" =~ ${MY_REGX} ]] ; then # {
    MY_COMPONENTs="$1" ; shift ;
 fi ; # }
 
+###############################################################################
+# Attach a commom prefix description to the destination filename.
+#
+MY_PREFIX_DESC='' ;
+if [ $# -gt 0 -a "$1" = '-p' ] ; then # {
+   shift ;
+   MY_PREFIX_DESC="$1" ; shift ;
+fi # }
+
 if [ $# -eq 0 ] ; then # {
-  usage 'No pathname was provided' ;
+  usage 'No pathname(s) were provided' ;
   exit 2 ;
 fi ; # }
 
@@ -43,7 +56,7 @@ fi ; # }
 tput sgr0;
 while [ $# -gt 0 ] ; do # {
   SRC_PATHNAME="$1" ; shift ;
-  DST_NAME="$(echo "${SRC_PATHNAME}" | rev | cut -d'/' -f1-${MY_COMPONENTs} | rev | sed -e 's#/#∕#g')" ;
+  DST_NAME="${MY_PREFIX_DESC}$(echo "${SRC_PATHNAME}" | rev | cut -d'/' -f1-${MY_COMPONENTs} | rev | sed -e 's#/#∕#g')" ;
 
   #############################################################################
   # HACK :: If we find the string 'NO_RSYNC/' in the source pathname,
