@@ -76,6 +76,12 @@
 # (Gracefully trips while stepping off soap box.)
 #
 ###############################################################################
+# Standard FLAC/MP3 tags to always have (from an EAC/wine page):
+# https://ubuntuforums.org/showthread.php?t=2447688
+#
+# -T "ARTIST=%artist%" -T "TITLE=%title%" -T "ALBUM=%albumtitle%" -T "DATE=%year%" -T "TRACKNUMBER=%tracknr%" -T "GENRE=%genre%"
+#
+###############################################################################
 # https://jmesb.com/how_to/create_id3_tags_using_ffmpeg :: IMPORTANT?
 #
 # ffmpeg32 -i in.mp3 -i metadata.txt -map_metadata 1 -c:a copy -id3v2_version 3 -write_id3v1 1 out.mp3
@@ -419,6 +425,8 @@ check_format() { # regexp message variable expected_format
 # The FFMPEG time format is HH:MM:SS.MILLISECONDS, so the frames would need
 # to be converted to milliseconds.
 # An INDEX 01 '04:04:25' would be '00:04:04.333' for FFMPEG.
+#
+# TODO :: Use a shell "reference" for the return value.
 #
 G_TIME_RESULT='' ;
 get_time_difference() { # 'cue | ms' "${END_TIME}" "${START_TIME}"

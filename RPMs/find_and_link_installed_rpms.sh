@@ -141,6 +141,8 @@ sigexit_handler() {
 trap 'sigint_handler' HUP INT QUIT TERM ; # Don't include 'EXIT' here...
 trap 'sigexit_handler' EXIT
 
+###############################################################################
+#
 usage() {
     { set +x ; } >/dev/null 2>&1 ;
     local MY_APP="$( basename $0 )" ; # $0 is GLOBAL
@@ -157,11 +159,15 @@ usage() {
     fi
     tput setaf 2 ; tput bold ; echo    'Usage - ' ; tput sgr0 ;
 
+ #  tput setaf 3 ; tput bold ;
+ #  echo " ${MY_APP} [-hl] [-H|-C] [-r RPMs_baseline.txt] RPMs_dir [RPMs_dir ..]" ;
+ #  tput sgr0 ;
+
     tput setaf 3 ; tput bold ;
     echo " ${MY_APP} [-hl] [-H|-C] [-r RPMs_baseline.txt] RPMs_dir [RPMs_dir ..]" ;
     tput sgr0 ;
 
-    echo    '  -h  print this help message and exit' ;
+    echo    '  -h  print this help message and exit.' ;
  #  echo    "  -l  log the activity to ‘${ATTR_YELLOW}${RPMs_DEST_DIR}.log${ATTR_OFF}’" ;
     echo    "  -b  url :: Download all of the baseline RPMs into the directory ‘${ATTR_GREEN}${RPMs_DEST}/RPMs_BASE${ATTR_OFF}’." ;
     echo    "      Example - -b 'https://archives.fedoraproject.org/pub/fedora/linux/releases/37/Everything/x86_64/os/Packages/'" ;
@@ -180,7 +186,6 @@ usage() {
     echo    " ${ATTR_YELLOW_BOLD}Notes:${ATTR_OFF} - This script’s error checking is very minimal ... :)" ;
     echo    "        - The RPM output directory defaults to ‘${ATTR_YELLOW}${RPMs_DEST_DIR}${ATTR_OFF}’." ;
     echo    "        - The RPM output directory must ${ATTR_RED_BOLD}NOT${ATTR_OFF} already exist." ;
-    echo ; echo ;
 
     exit 1 ;
 }
