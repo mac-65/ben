@@ -1,6 +1,5 @@
 #
 ###############################################################################
-# https://rpmfusion.org/Configuration
 #
 # 0. /bin/cp PACKAGES_FROM_FEDORA_37.txt /ito/RPMs/Fedora_39-1.5/PACKAGES_FROM_FEDORA_37.txt
 #
@@ -10,13 +9,16 @@
 #
 #      rpm -q --queryformat '%{NAME}\n' `rpm -qa` | sort >foo.txt ;
 #
-# 2. Run this on the target upgrade machine (e.g., Fedora 39) to get a list of
+# 2. Do NOT forget to add the RPMFusion repos:
+#      https://rpmfusion.org/Configuration
+#
+# 3. Run this on the target upgrade machine (e.g., Fedora 40) to get a list of
 #    packages that are NOT available (Error: Unable to find a match:) -->
 #
 #      cd 0003-Fedora_37 && \
 #      dnf -y install --downloadonly --downloaddir=. `cat ../PACKAGES_FROM_FEDORA_37.txt | grep -v '^#'` ;
 #
-# 3. Next, scrape the list of missing packages (I wish/don't know if there is
+# 4. Next, scrape the list of missing packages (I wish/don't know if there is
 #    a way to tell DNF to ignore the "No match for argument:" error) and paste
 #    the list as noted in the command below.  This hacky method will build a
 #    "new" file with the missing packages commented out by '###' -->
@@ -28,15 +30,15 @@
 #     (I think because I installed 'plasma-workspace-x11').
 #   - lsb_release - I used '--allowerasing' for this; we'll see if it works ...
 #
-#      /bin/cp '../PACKAGES_FROM_FEDORA_37.txt' './PACKAGES_FEDORA_39.txt' ; for yy in PASTE_IN_ERROR_PACKAGES_FROM_ABOVE_DNF_COMMAND ; do cat './PACKAGES_FEDORA_39.txt' | sed -e "s/^${yy}/### ${yy}/" >/tmp/$$.txt ; /bin/mv /tmp/$$.txt './PACKAGES_FEDORA_39.txt' ; done
-#      /bin/cp '../PACKAGES_FROM_FEDORA_37.txt' './PACKAGES_FEDORA_39.txt' ; for yy in sddm kde-settings-sddm lsb_release redhat-lsb-core 7kaa 7kaa-data aegisub akmod-v4l2loopback akmod-vhba akmod-VirtualBox atom audacious-plugins-freeworld audacious-plugins-freeworld-aac audacity-freeworld BasiliskII cdemu-client cdemu-daemon cnrdrvcups-ufr2-us compat-ffmpeg4 compat-libstdc++-296 compat-libstdc++-33 cubeb cups-filters-libs dgen-sdl dvd-slideshow elisa-player-debuginfo elisa-player-debugsource enchant2-aspell faac faac-devel faad2-devel faad2-libs fedora-repos-modular ffmpeg ffmpeg-devel ffmpeg-libs ffmpegthumbnailer ffms2 freecad freecad-data Frodo frogatto fs-uae fs-uae-arcade gcdemu gens gl-117 gnuboy-fb gnuboy-sdl gnuboy-x google-chrome-stable gpac-devel gpac-libs gpac-static gpg-pubkey graphviz-php gstreamer1-plugins-bad-freeworld gstreamer1-plugins-entrans gstreamer1-plugins-entrans-docs gstreamer1-plugins-ugly gsview HandBrake HandBrake-gui ht-caladea-fonts imagination jack-audio-connection-kit-example-clients kdegames3-devel kf5-kmailtransport-akonadi kmod-v4l2loopback kmod-v4l2loopback-6.0.14-300.fc37.x86_64 kmod-v4l2loopback-6.4.6-100.fc37.x86_64 kmod-v4l2loopback-6.4.9-100.fc37.x86_64 kmod-vhba-6.0.14-300.fc37.x86_64 kmod-vhba-6.4.6-100.fc37.x86_64 kmod-vhba-6.4.9-100.fc37.x86_64 kmod-VirtualBox-6.0.14-300.fc37.x86_64 kmod-VirtualBox-6.4.6-100.fc37.x86_64 kmod-VirtualBox-6.4.9-100.fc37.x86_64 libavdevice libde265 libde265-devel libfame libffi3.1 libmirage libquicktime libquicktime-devel librtmp libva-intel-driver libvirt-daemon-driver-storage-sheepdog lucidlife lxdream mari0 maven-artifact maven-artifact-manager maven-model maven-plugin-registry maven-profile maven-project maven-settings maven-toolchain mdf2iso meka mencoder mesa-libGLU-debuginfo mesa-libGLU-debugsource mjpegtools mjpegtools-lav mjpegtools-libs mozjs78 mpd mpd-firewalld mplayer mplayer-common nim-srpm-macros openCOLLADA opencolorio1 osmose pcsx2 ppsspp-data ppsspp-libs ppsspp-sdl python3-grako python3-pyside2 python3-shiboken2 python3-slip python3-slip-dbus qt-heif-image-plugin redhat-lsb-submod-security rpmfusion-free-appstream-data rpmfusion-free-obsolete-packages rpmfusion-free-release rpmfusion-nonfree-appstream-data rpmfusion-nonfree-obsolete-packages rpmfusion-nonfree-release sgabios-bin SheepShaver shippy-common simple-mtpfs smtube snes9x snes9x-gtk stella svt-hevc-libs unace v4l2loopback vhba vice vice-common vice-data vice-x128 vice-x64 vice-xcbm-ii vice-xpet vice-xplus4 vice-xvic VirtualBox VirtualBox-kmodsrc VirtualBox-server vlc-debuginfo vlc-debugsource wxBase3 wxBase3-devel wxGTK3 wxGTK3-devel wxGTK3-gl wxGTK3-i18n wxGTK3-media wxGTK3-webview x264 x264-devel x264-libs x265 x265-devel x265-libs xmris xroar xv xv-debuginfo xv-debugsource xv-doc xview xview-clients xview-devel xview-devel-examples yabause zboy zig-doc zsnes ; do cat './PACKAGES_FEDORA_39.txt' | sed -e "s/^${yy}/### ${yy}/" >/tmp/$$.txt ; /bin/mv /tmp/$$.txt './PACKAGES_FEDORA_39.txt' ; done
+#      /bin/cp '../PACKAGES_FROM_FEDORA_37.txt' './PACKAGES_FEDORA_40.txt' ; for yy in PASTE_IN_ERROR_PACKAGES_FROM_ABOVE_DNF_COMMAND ; do cat './PACKAGES_FEDORA_40.txt' | sed -e "s/^${yy}/### ${yy}/" >/tmp/$$.txt ; /bin/mv /tmp/$$.txt './PACKAGES_FEDORA_40.txt' ; done
+#      /bin/cp '../PACKAGES_FROM_FEDORA_37.txt' './PACKAGES_FEDORA_40.txt' ; for yy in PASTE_IN_ERROR_PACKAGES_FROM_ABOVE_DNF_COMMAND ; do cat './PACKAGES_FEDORA_40.txt' | sed -e "s/^${yy}/### ${yy}/" >/tmp/$$.txt ; /bin/mv /tmp/$$.txt './PACKAGES_FEDORA_40.txt' ; done
 #
 ###############################################################################
-# 4. Finally, re-run the "dnf -y install ..." snippet using the "corrected"
+# 5. Finally, re-run the "dnf -y install ..." snippet using the "corrected"
 #    list of install-able packages.  Sometimes '--allowerasing' is needed for
 #    a clean install.
 #
-#      dnf -y install --downloadonly --downloaddir=. `cat './PACKAGES_FEDORA_39.txt'| grep -v '^#'` ;
+#      dnf -y install --downloadonly --downloaddir=. `cat './PACKAGES_FEDORA_40.txt'| grep -v '^#'` ;
 #
 ###############################################################################
 ###############################################################################
