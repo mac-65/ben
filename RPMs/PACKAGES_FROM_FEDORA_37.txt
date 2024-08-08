@@ -1,6 +1,94 @@
 #
 ###############################################################################
+# Welcome to my brute-force Fedora distro upgrade steps.
 #
+# I know there's supposed to be a "recommended" way of upgrading a distro, but
+# I've run into "issues" with those methods -- I don't recall the details, but
+# it usually turned into a mess.  Part of the issue may be that I usually skip
+# at least 1 major release cycle between upgrades; I have an unusual setup ...
+# This also follows my model of retaining _all_ of the RPMs after installation
+# ensuring the distro's integrity if I have to rebuild or want to build another
+# identical system at the same major release number with all of the same RPMs
+# at their same exact version.
+#
+# I will probably update my Fedora-27-and-me git repo with a step-by-step
+# process for doing this.  Honestly, I (and I suspect many, many others) will
+# choose to stay at Fedora 39 for a long time as Fedora 40 and the "new" KDE
+# introduce too many regressions with the removal of x11 in favor of Wayland.
+# My experience with KDE / Fedora with architectural changes like this is it
+# usually takes about 5 years for it to fully mature - with Wayland, who knows.
+# I tried installing the 'plasma-workspace-x11' / 'sddm-x11' support packages
+# (using several permutations, etc.) and have had limited degrees of success,
+# but ultimately without a functional system; there are only so many hours in
+# the day ...
+#
+# The quick outline of how I do this is by first building the upgrade distro
+# in a VM (VirtualBox).  After I'm satisfied with that (compilers works, I can
+# build certain things, etc.), I get all of the RPMs for the upgrade using my
+# nifty 'find_and_link_installed_rpms.sh' script (especially the '-b' option)
+# and save those RPMs for a bulk install on other systems I want to upgrade.
+# Next, I'll install "that" on an nVidia equipped laptop and ensure the things
+# that need real graphics hardware work, nVidia driver builds okay, etc..
+# And finally, on my desktop.  Hopefully, I didn't miss anything, and I have
+# a successful upgrade!
+#
+# Search '0\.' for start of script snippets and notes for the update ...
+#
+###############################################################################
+# Quirky notes:
+# https://www.reddit.com/r/kde/comments/1c6xysf/i_am_still_on_kde_plasma_527_i_am_missing_out_on/
+#
+# So, probably little value was added to the KDE desktop to toss x11 in favor
+# having to hack it back in for Fedora 40 KDE to reclaim the "not-yet-written"
+# but were already there in x11 that Wayland offered.
+#
+#H https://superuser.com/questions/395820/how-to-properly-end-a-kde-session-from-shell-without-root-privileges
+#
+# The answer is a solution specific for KDE5, a more generic answer is
+#
+# loginctl list-sessions
+# loginctl terminate-session <id>
+#   --- OR ---
+# loginctl terminate-user <username>
+#
+# There are more possible commands:
+#
+# Session Commands:
+#   list-sessions            List sessions
+#   session-status [ID...]   Show session status
+#   show-session [ID...]     Show properties of sessions or the manager
+#   activate [ID]            Activate a session
+#   lock-session [ID...]     Screen lock one or more sessions
+#   unlock-session [ID...]   Screen unlock one or more sessions
+#   lock-sessions            Screen lock all current sessions
+#   unlock-sessions          Screen unlock all current sessions
+#   terminate-session ID...  Terminate one or more sessions
+#   kill-session ID...       Send signal to processes of a session
+#
+# User Commands:
+#   list-users               List users
+#   user-status [USER...]    Show user status
+#   show-user [USER...]      Show properties of users or the manager
+#   enable-linger [USER...]  Enable linger state of one or more users
+#   disable-linger [USER...] Disable linger state of one or more users
+#   terminate-user USER...   Terminate all sessions of one or more users
+#   kill-user USER...        Send signal to processes of a user
+#
+# Seat Commands:
+#   list-seats               List seats
+#   seat-status [NAME...]    Show seat status
+#   show-seat [NAME...]      Show properties of seats or the manager
+#   attach NAME DEVICE...    Attach one or more devices to a seat
+#   flush-devices            Flush all device associations
+#   terminate-seat NAME...   Terminate all sessions on one or more seats
+#
+###############################################################################
+# SPECIAL NOTEs:
+# - audit-3.1.2-4.fc39.x86_64 removal fails during update (since I run update
+#   at run level S).  Simply init 3 and erase that specific package -->
+#     rpm -e audit-3.1.2-4.fc39.x86_64
+#
+###############################################################################
 # 0. /bin/cp PACKAGES_FROM_FEDORA_37.txt /ito/RPMs/Fedora_39-1.5/PACKAGES_FROM_FEDORA_37.txt
 #
 # 1. This snippet, which is run on my active Fedora 37Beta installation, gets
@@ -12,7 +100,7 @@
 # 2. Do NOT forget to add the RPMFusion repos:
 #      https://rpmfusion.org/Configuration
 #
-# 3. Run this on the target upgrade machine (e.g., Fedora 40) to get a list of
+# 3. Run this on the target upgrade machine (e.g., Fedora 39) to get a list of
 #    packages that are NOT available (Error: Unable to find a match:) -->
 #
 #      cd 0003-Fedora_37 && \
@@ -30,15 +118,15 @@
 #     (I think because I installed 'plasma-workspace-x11').
 #   - lsb_release - I used '--allowerasing' for this; we'll see if it works ...
 #
-#      /bin/cp '../PACKAGES_FROM_FEDORA_37.txt' './PACKAGES_FEDORA_40.txt' ; for yy in PASTE_IN_ERROR_PACKAGES_FROM_ABOVE_DNF_COMMAND ; do cat './PACKAGES_FEDORA_40.txt' | sed -e "s/^${yy}/### ${yy}/" >/tmp/$$.txt ; /bin/mv /tmp/$$.txt './PACKAGES_FEDORA_40.txt' ; done
-#      /bin/cp '../PACKAGES_FROM_FEDORA_37.txt' './PACKAGES_FEDORA_40.txt' ; for yy in PASTE_IN_ERROR_PACKAGES_FROM_ABOVE_DNF_COMMAND ; do cat './PACKAGES_FEDORA_40.txt' | sed -e "s/^${yy}/### ${yy}/" >/tmp/$$.txt ; /bin/mv /tmp/$$.txt './PACKAGES_FEDORA_40.txt' ; done
+#      /bin/cp '../PACKAGES_FROM_FEDORA_37.txt' './PACKAGES_FEDORA_39.txt' ; for yy in PASTE_IN_ERROR_PACKAGES_FROM_ABOVE_DNF_COMMAND ; do cat './PACKAGES_FEDORA_39.txt' | sed -e "s/^${yy}/### ${yy}/" >/tmp/$$.txt ; /bin/mv /tmp/$$.txt './PACKAGES_FEDORA_39.txt' ; done
+#      /bin/cp '../PACKAGES_FROM_FEDORA_37.txt' './PACKAGES_FEDORA_39.txt' ; for yy in 7kaa 7kaa-data akmod-vhba atom cdemu-client cdemu-daemon cnrdrvcups-ufr2-us compat-libstdc++-296 compat-libstdc++-33 cubeb cups-filters-libs elisa-player-debuginfo elisa-player-debugsource enchant2-aspell fedora-repos-modular freecad freecad-data gcdemu gl-117 google-chrome-stable gpg-pubkey graphviz-php gstreamer1-plugins-entrans gstreamer1-plugins-entrans-docs ht-caladea-fonts jack-audio-connection-kit-example-clients kdegames3-devel kf5-kmailtransport-akonadi kmod-v4l2loopback-6.0.14-300.fc37.x86_64 kmod-v4l2loopback-6.4.6-100.fc37.x86_64 kmod-v4l2loopback-6.4.9-100.fc37.x86_64 kmod-vhba-6.0.14-300.fc37.x86_64 kmod-vhba-6.4.6-100.fc37.x86_64 kmod-vhba-6.4.9-100.fc37.x86_64 kmod-VirtualBox-6.0.14-300.fc37.x86_64 kmod-VirtualBox-6.4.6-100.fc37.x86_64 kmod-VirtualBox-6.4.9-100.fc37.x86_64 libffi3.1 libmirage libvirt-daemon-driver-storage-sheepdog lucidlife maven-artifact maven-artifact-manager maven-model maven-plugin-registry maven-profile maven-project maven-settings maven-toolchain mdf2iso mesa-libGLU-debuginfo mesa-libGLU-debugsource mozjs78 nim-srpm-macros openCOLLADA opencolorio1 python3-grako python3-pyside2 python3-shiboken2 python3-slip python3-slip-dbus redhat-lsb-submod-security sgabios-bin shippy-common simple-mtpfs vhba vlc-debuginfo vlc-debugsource wxBase3 wxBase3-devel wxGTK3 wxGTK3-devel wxGTK3-gl wxGTK3-i18n wxGTK3-media wxGTK3-webview xv-debuginfo xv-debugsource xview xview-clients xview-devel xview-devel-examples zig-doc ; do cat './PACKAGES_FEDORA_39.txt' | sed -e "s/^${yy}/### ${yy}/" >/tmp/$$.txt ; /bin/mv /tmp/$$.txt './PACKAGES_FEDORA_39.txt' ; done
 #
 ###############################################################################
 # 5. Finally, re-run the "dnf -y install ..." snippet using the "corrected"
 #    list of install-able packages.  Sometimes '--allowerasing' is needed for
 #    a clean install.
 #
-#      dnf -y install --downloadonly --downloaddir=. `cat './PACKAGES_FEDORA_40.txt'| grep -v '^#'` ;
+#      dnf -y install --downloadonly --downloaddir=. `cat './PACKAGES_FEDORA_39.txt'| grep -v '^#'` ;
 #
 ###############################################################################
 ###############################################################################
