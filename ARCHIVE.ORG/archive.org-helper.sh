@@ -168,6 +168,14 @@ get_and_parse_html_page() {
     { pushd "${HTML_DIR}" ; } >/dev/null 2>&1 ;
 
       ${WGET_HTML} "${URL_RAW}" ; RC=$? ;
+        # Did we get a 'ERROR 503: Service Temporarily Unavailable.' ?
+      if [ ${RC} -eq 8 ] ; then # {
+        printf "$(tput setaf 1; tput bold)FATAL - $(tput sgr0; tput bold)"
+        printf "wget$(tput sgr0) encountered a error (probably a 503)%s\n" '!';
+        # Abort the process and prevent an entry being made in ‘./.DONE’. This
+        # should allow the script to pick up where it left off when it is rerun.
+        exit 8;
+      fi # }
 
         #########################################################################
         # Sometimes ... We'll get 'index.html' __instead__ of the basename of
@@ -260,7 +268,10 @@ if true ; then # {
     #
   for HTML_LINK in \
      '# This is a comment.  Note it must be quoted.' \
+      -https://archive.org/details/ragnarok-online-music-collection \
+      https://archive.org/details/ragnarok-online-complete-soundtrack \
       https://archive.org/details/ragnarok-online-music-collection \
+      https://archive.org/details/Saladedemais_-_MPTeam_-_Ragnarok_Online_Selection \
      '# This next link will be skipped.' \
      -https://archive.org/details/ragnarok-online-music-collection \
     ; do # {
