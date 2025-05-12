@@ -178,9 +178,44 @@ fi # }}
 
       MY_TEST_NAME="./files/${RESULT_LINK_TITLE}.torrent" ;
       if [ -s "${MY_TEST_NAME}" ] ; then # {{
-        printf "  $(tput setaf 3; tput bold)SKIPPING '$(tput setaf 5)%s$(tput setaf 3)'" \
-               "$(basename "${MY_TEST_NAME}")" ;
-        printf "$(tput sgr0; tput bold), already in './files'\n" ;
+        #######################################################################
+        # If my "client" was NOT started, then I'll get a bunch of incomplete
+        # links.  So, I'll see if the main file was retrieved, if not then
+        # I'll try again (hopefully I'll have started the "client" this time).
+        printf '<<<< "%s" >>>>\n' "${RESULT_LINK_TITLE}" ;
+        if [ -s "${RESULT_LINK_TITLE}" ] ; then # {{
+          printf "  $(tput setaf 3; tput bold)SKIPPING '$(tput setaf 5)%s$(tput setaf 3)'" \
+                 "$(basename "${MY_TEST_NAME}")" ;
+          printf "$(tput sgr0; tput bold), already in './files'\n" ;
+        else # }{
+          #####################################################################
+          # TODO :: I need to "fix" 'HELPER_SCRIPT' to _NOT_ wget the file if
+          #         it's already there (avoid the extra ".1" file from wget).
+          printf "  $(tput bold; tput setab 5)RETRYING$(tput sgr0; tput bold) '" ;
+          printf "$(tput setaf 2)%s$(tput sgr0; tput bold)'$(tput sgr0)\n" \
+                 "${RESULT_LINK_TITLE}"
+          if [ ${DRY_RUN} -eq 0 ] ; then # {
+            if [ ${MY_DEBUG} -eq 0 ] ; then # {{
+               /bin/rm -f "./files/$(basename "${RESULT_LINK}")" ;
+               /bin/rm -f "./files/${RESULT_LINK_TITLE}.torrent" ;
+               ${HELPER_SCRIPT} "${RESULT_LINK}" "${RESULT_LINK_TITLE}" ;
+            else # }{
+               printf "  $(tput bold; tput setaf 1)REMOVING:$(tput sgr0) " ;
+               printf '"%s", "%s"\n' \
+                      "./files/$(basename "${RESULT_LINK}")" \
+                      "./files/${RESULT_LINK_TITLE}.torrent" ;
+               printf "  $(tput bold)>> PWD $(tput setab 4; tput setaf 3)'%s'%s\n" \
+                      "$(pwd)" "$(tput sgr0)" ;
+               printf "     $(tput bold)==> $(tput setaf 5)%s$(tput sgr0)" \
+                      "${HELPER_SCRIPT}" ;
+               printf " $(tput bold)'$(tput setaf 3)%s$(tput sgr0; tput bold)'$(tput sgr0)" \
+                      "${RESULT_LINK}" ;
+               printf " $(tput bold)'$(tput setaf 3)%s$(tput sgr0; tput bold)'$(tput sgr0)" \
+                      "${RESULT_LINK_TITLE}" ;
+               echo ; tput sgr0 ;
+            fi # }}
+          fi # }
+        fi # }}
       else # }{
         printf "  $(tput bold)TRYING '$(tput setaf 2)%s$(tput sgr0; tput bold)'$(tput sgr0)\n" \
                "${RESULT_LINK_TITLE}"
@@ -206,7 +241,7 @@ fi # }}
  done # }
 
  ##############################################################################
- # Yeah, we __always__ have a 'SEARCH_RESULT_DIR'; it's just how it evolved ...
+ # Yeah, we __always__ have a 'SEARCH_RESULT_DIR'; it's just how it evolved …
  #
  if [[ ${MY_DEBUG} -eq 0 && -d "${SEARCH_RESULT_DIR}" ]] ; then # {{
    MY_SAVE_BASE="$(basename "${RESULT_FILE}" '.html')" ;
