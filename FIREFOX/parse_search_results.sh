@@ -182,7 +182,8 @@ fi # }}
         # If my "client" was NOT started, then I'll get a bunch of incomplete
         # links.  So, I'll see if the main file was retrieved, if not then
         # I'll try again (hopefully I'll have started the "client" this time).
-        printf '<<<< "%s" >>>>\n' "${RESULT_LINK_TITLE}" ;
+        [ ${MY_DEBUG} -eq 1 ] \
+              && printf '<<<< "%s" >>>>\n' "${RESULT_LINK_TITLE}" ;
         if [ -s "${RESULT_LINK_TITLE}" ] ; then # {{
           printf "  $(tput setaf 3; tput bold)SKIPPING '$(tput setaf 5)%s$(tput setaf 3)'" \
                  "$(basename "${MY_TEST_NAME}")" ;
