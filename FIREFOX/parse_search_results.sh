@@ -10,6 +10,12 @@ MY_ZCAT='/usr/bin/zcat --force' ;
 HELPER_SCRIPT='st.sh' ; # Call an external script to load the torrent file.
 
 ###############################################################################
+# ONLY enable my enhancement / hack if we're in the SERIES directory tree ...
+# This isn't really a bug fix, but rather a use case I did NOT anticipate.
+MY_IS_SERIES=0 ;
+if pwd | grep -q 'SERIES' ; then MY_IS_SERIES=1 ; fi ; # use builtin pwd
+
+###############################################################################
 # A quick and dirty hack to enable a DEBUG state ...
 #
 MY_DEBUG=0 ; # ... turns off the clean-up  parts for the HTML file.
@@ -177,13 +183,17 @@ fi # }}
            };
 
       MY_TEST_NAME="./files/${RESULT_LINK_TITLE}.torrent" ;
-      if [ -s "${MY_TEST_NAME}" ] ; then # {{
+      if [ ${MY_DEBUG} -eq 1 ] ; then # {
+            printf '<<<< "%s" >>>>\n' "${RESULT_LINK_TITLE}" ;
+            printf '<<<< MY_TEST_NAME="%s" >>>>\n' "${MY_TEST_NAME}" ;
+            printf '<<<< MY_IS_SERIES="%s" >>>>\n' "${MY_IS_SERIES}" ;
+      fi # }
+      if [ "${MY_IS_SERIES}" -eq 1 -a -s "${MY_TEST_NAME}" ] ; then # {{
         #######################################################################
         # If my "client" was NOT started, then I'll get a bunch of incomplete
         # links.  So, I'll see if the main file was retrieved, if not then
         # I'll try again (hopefully I'll have started the "client" this time).
-        [ ${MY_DEBUG} -eq 1 ] \
-              && printf '<<<< "%s" >>>>\n' "${RESULT_LINK_TITLE}" ;
+        #
         if [ -s "${RESULT_LINK_TITLE}" ] ; then # {{
           printf "  $(tput setaf 3; tput bold)SKIPPING '$(tput setaf 5)%s$(tput setaf 3)'" \
                  "$(basename "${MY_TEST_NAME}")" ;
