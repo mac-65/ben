@@ -2,6 +2,14 @@
 
 # exit 0;
 
+sigint_handler() {
+  printf 'ABORTED BY USER\n' ;
+  exit 3;
+}
+
+trap 'sigint_handler' SIGINT SIGHUP SIGTERM ; # trap -l
+
+
   #############################################################################
   # This is a "helper" script for retrieving archives from 'archive.org'.
   #
