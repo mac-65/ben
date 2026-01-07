@@ -2,10 +2,12 @@
 #
 
 SEARCH_RESULT_DIR='./SEARCH_RESULTs' ;
+SKIP_THIS_DIRECTORY='./SKIP_THIS_DIRECTORY.txt' ; # Skip if this file exists.
 ARG_COUNT=$# ;
 
 MY_GZIP='/usr/bin/gzip' ;
 MY_ZCAT='/usr/bin/zcat --force' ;
+MY_BANNER='/usr/bin/banner' ;
 
 MY_POST_SCRIPT='./.post_parse.sh' ; # Run this script if it exists ...
 
@@ -15,7 +17,7 @@ HELPER_SCRIPT='st.sh' ; # Call an external script to load the torrent file.
 # ONLY enable my enhancement / hack if we're in the SERIES directory tree ...
 # This isn't really a bug fix, but rather a use case I did NOT anticipate.
 MY_IS_SERIES=0 ;
-if pwd | grep -q 'SERIES' ; then MY_IS_SERIES=1 ; fi ; # use builtin pwd
+if pwd | grep -q 'SERIES' ; then MY_IS_SERIES=1 ; fi ; # use the builtin 'pwd'.
 
 ###############################################################################
 # A quick and dirty hack to enable a DEBUG state ...
@@ -175,6 +177,16 @@ fi # }}
       fi # }}
 
       #########################################################################
+      # See if we're skipping this directory __before__ we do too much work ...
+      #
+      if [ -f "${TARGET_DIR}/${SKIP_THIS_DIRECTORY}" ] ; then # {{
+         tput bold; tput setaf 3; ${MY_BANNER} 'Skipping ...' ; tput sgr0;
+         printf "  $(tput bold)SKIPPING -- '%s$(tput bold)'$(tput sgr0)\n" \
+                "$(tput bold; tput setaf 6)${TARGET_DIR}$(tput sgr0)" ;
+         continue ;
+      fi # }}
+
+      #########################################################################
       # The "helper" script always uses './files', so let’s check it outside
       # of __this__ script to save some time.
       #
@@ -183,7 +195,6 @@ fi # }}
              printf "Can't pushd '${TARGET_DIR}'\n" ; \
              exit 2; \
            };
-
       MY_TEST_NAME="./files/${RESULT_LINK_TITLE}.torrent" ;
       if [ ${MY_DEBUG} -eq 1 ] ; then # {
             printf '<<<< "%s" >>>>\n' "${RESULT_LINK_TITLE}" ;
@@ -204,6 +215,8 @@ fi # }}
           #####################################################################
           # TODO :: I need to "fix" 'HELPER_SCRIPT' to _NOT_ wget the file if
           #         it's already there (avoid the extra ".1" file from wget).
+          #         BTW, this was NOT my bug but a "mis-feature" of the Fedora
+          #         upgrade which included an incompatible wget2 ...
           printf "  $(tput bold; tput setab 5)RETRYING$(tput sgr0; tput bold) '" ;
           printf "$(tput setaf 2)%s$(tput sgr0; tput bold)'$(tput sgr0)\n" \
                  "${RESULT_LINK_TITLE}"
