@@ -7,6 +7,8 @@ ARG_COUNT=$# ;
 MY_GZIP='/usr/bin/gzip' ;
 MY_ZCAT='/usr/bin/zcat --force' ;
 
+MY_POST_SCRIPT='./.post_parse.sh' ; # Run this script if it exists ...
+
 HELPER_SCRIPT='st.sh' ; # Call an external script to load the torrent file.
 
 ###############################################################################
@@ -274,6 +276,15 @@ fi # }}
  fi # }}
 
 printf ". $(tput setaf 2)COMPLETE!\n" ; tput sgr0 ;
+
+###############################################################################
+# Run a post script if it exists.  There are some items which are not easily
+# automated, this can serve to remind me to perform those manual steps ...
+#
+if [ -x "${MY_POST_SCRIPT}" ] ; then # {
+
+  . "${MY_POST_SCRIPT}" ;
+fi # }
 
 exit 0;
 
